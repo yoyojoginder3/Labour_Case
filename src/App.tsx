@@ -30,16 +30,18 @@ const STORAGE_META_KEY = 'gsrtc_court_cases_meta_v3';
 const STORAGE_USER_KEY = 'gsrtc_court_cases_user_v3';
 
 export default function App() {
-  // Current user authentication
-  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
+  // Always require login whenever any user opens the link
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+
+  // Clear any previously persisted user session so login page always shows first
+  useEffect(() => {
     try {
-      const savedUser = localStorage.getItem(STORAGE_USER_KEY);
-      if (savedUser) return JSON.parse(savedUser);
+      localStorage.removeItem(STORAGE_USER_KEY);
+      sessionStorage.removeItem(STORAGE_USER_KEY);
     } catch {
-      // Fallback
+      // Ignore
     }
-    return null;
-  });
+  }, []);
 
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -112,20 +114,15 @@ export default function App() {
     }, 3800);
   };
 
-  // Persistent storage sync
+  // Persistent storage sync for case data and metadata only (user must login each time)
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       localStorage.setItem(STORAGE_META_KEY, JSON.stringify(meta));
-      if (currentUser) {
-        localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(currentUser));
-      } else {
-        localStorage.removeItem(STORAGE_USER_KEY);
-      }
     } catch {
       // Ignore quota errors
     }
-  }, [data, meta, currentUser]);
+  }, [data, meta]);
 
   const isAdmin = currentUser?.role === 'admin';
 
