@@ -1,0 +1,6 @@
+{
+  "name": "નિગમના કેસોની સંપૂર્ણ વિગત - GSRTC લેબર શાખા સુરત",
+  "description": "ગુજરાત એસ.ટી. નિગમ સુરત વિભાગ લેબર શાખાના હાઇકોર્ટ, લેબર કોર્ટ અને ઔદ્યોગિક અદાલત કેસોનું ડિજિટલ પોર્ટલ.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
