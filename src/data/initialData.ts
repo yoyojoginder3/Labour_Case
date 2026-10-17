@@ -181,6 +181,23 @@ export function extractDateFromStatus(statusText: string): string | null {
   return match ? match[1] : null;
 }
 
+/** Parses hearing date string (DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY) into Date object */
+export function parseHearingDateObj(dateStr: string): Date | null {
+  if (!dateStr) return null;
+  const clean = dateStr.replace(/[-.]/g, '/').trim();
+  const parts = clean.split('/');
+  if (parts.length === 3) {
+    let day = parseInt(parts[0], 10);
+    let month = parseInt(parts[1], 10) - 1;
+    let year = parseInt(parts[2], 10);
+    if (year < 100) year += 2000;
+    if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+      return new Date(year, month, day);
+    }
+  }
+  return null;
+}
+
 /** Categorizes case status for badges and filters */
 export function getStatusCategory(statusText: string): {
   type: 'final_hearing' | 'notice_adjourned' | 'admission' | 'disposed' | 'argument' | 'other';

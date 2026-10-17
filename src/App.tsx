@@ -23,7 +23,7 @@ import { ExcelUploadModal } from './components/ExcelUploadModal';
 import { NotificationModal } from './components/NotificationModal';
 import { LoginModal } from './components/LoginModal';
 import { LoginPage } from './components/LoginPage';
-import { Check, AlertCircle, Info, Plus, Download, Landmark, Scale, Gavel, Archive, ShieldCheck, Lock, Bell, MessageSquare, Smartphone } from 'lucide-react';
+import { Check, AlertCircle, Info, Plus, Download, Landmark, Scale, Gavel, Archive, ShieldCheck, Lock, Bell, MessageSquare, Smartphone, Pencil } from 'lucide-react';
 
 const STORAGE_KEY = 'gsrtc_court_cases_data_v3';
 const STORAGE_META_KEY = 'gsrtc_court_cases_meta_v3';
@@ -42,6 +42,8 @@ export default function App() {
   });
 
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleEditValue, setTitleEditValue] = useState('');
 
   // Load data from localStorage or fallback to default
   const [data, setData] = useState<SheetDataMap>(() => {
@@ -643,6 +645,13 @@ export default function App() {
         } else {
           // Merge: append new rows
           const currentRows = updated[sheetKey] ? [...updated[sheetKey]] : [incomingRows[0], incomingRows[1]];
+          // Ensure new heading (row 0) and column headers (row 1) from incoming Excel are applied
+          if (incomingRows[0]?.[0]?.trim()) {
+            currentRows[0] = [...incomingRows[0]];
+          }
+          if (incomingRows[1]?.some((c) => c && c.trim() !== '')) {
+            currentRows[1] = [...incomingRows[1]];
+          }
           const existingIdentifiers = new Set(
             currentRows.slice(2).map((r) => (r[3] || r[1] || '').trim().toLowerCase())
           );
@@ -680,8 +689,58 @@ export default function App() {
   };
 
   const isSheetConfigKey = activeSheet !== 'SUMMARY' && activeSheet !== 'CALENDAR';
-  const currentHeaders = isSheetConfigKey ? SHEET_CONFIGS[activeSheet as SheetKey]?.headers || [] : [];
-  const currentSheetTitle = isSheetConfigKey ? SHEET_CONFIGS[activeSheet as SheetKey]?.title || '' : '';
+  const sheetRows = (isSheetConfigKey && data[activeSheet as SheetKey]) || [];
+
+  // Dynamic Title: read from row 0 if available, else fallback to default
+  const currentSheetTitle = useMemo(() => {
+    if (sheetRows.length > 0 && sheetRows[0]?.[0]?.trim()) {
+      return sheetRows[0][0].trim();
+    }
+    return isSheetConfigKey ? SHEET_CONFIGS[activeSheet as SheetKey]?.title || '' : '';
+  }, [sheetRows, isSheetConfigKey, activeSheet]);
+
+  // Dynamic Column Headers: read from row 1 if available, else fallback to default
+  const currentHeaders = useMemo(() => {
+    if (sheetRows.length > 1 && sheetRows[1]) {
+      const rowHeaders = sheetRows[1].map((h) => String(h ?? '').trim());
+      let lastNonEmpty = -1;
+      for (let i = rowHeaders.length - 1; i >= 0; i--) {
+        if (rowHeaders[i]) {
+          lastNonEmpty = i;
+          break;
+        }
+      }
+      if (lastNonEmpty >= 0) {
+        return rowHeaders.slice(0, lastNonEmpty + 1).map((h, i) => h || `સ્તંભ ${i + 1}`);
+      }
+    }
+    return isSheetConfigKey ? SHEET_CONFIGS[activeSheet as SheetKey]?.headers || [] : [];
+  }, [sheetRows, isSheetConfigKey, activeSheet]);
+
+  const handleSaveTitle = (newTitle: string) => {
+    const trimmed = newTitle.trim();
+    if (!trimmed || !isSheetConfigKey) return;
+    setData((prev) => {
+      const updated: SheetDataMap = { ...prev };
+      const currentList = updated[activeSheet as SheetKey] ? [...updated[activeSheet as SheetKey]] : [];
+      if (currentList.length > 0) {
+        const titleRow = [...currentList[0]];
+        titleRow[0] = trimmed;
+        currentList[0] = titleRow;
+      } else {
+        currentList[0] = [trimmed];
+      }
+      updated[activeSheet as SheetKey] = currentList;
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      } catch (err) {
+        console.error('Failed to save title:', err);
+      }
+      return updated;
+    });
+    setIsEditingTitle(false);
+    showToast('✏️ હેડિંગ સફળતાપૂર્વક અપડેટ થયું!', 'success');
+  };
 
   if (!currentUser) {
     return (
@@ -827,7 +886,7 @@ export default function App() {
         ) : activeSheet === 'DISPOSED ARCHIVE' ? (
           <DisposedArchiveView
             rows={data['DISPOSED ARCHIVE'] || []}
-            headers={SHEET_CONFIGS['DISPOSED ARCHIVE'].headers}
+            headers={data['DISPOSED ARCHIVE']?.[1] || SHEET_CONFIGS['DISPOSED ARCHIVE'].headers}
             onRestoreCase={handleRestoreFromArchive}
             onDeleteArchiveCase={handleDeleteArchiveCase}
             onExportDisposedExcel={() => handleExportExcel('disposed')}
@@ -853,11 +912,55 @@ export default function App() {
                 >
                   {activeSheet === 'HC CASE' ? <Landmark className="w-5 h-5" /> : activeSheet === 'LABOUR CASE' ? <Scale className="w-5 h-5" /> : <Gavel className="w-5 h-5" />}
                 </div>
-                <div>
-                  <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
-                    {currentSheetTitle}
-                  </h2>
-                  <p className="text-xs font-bold text-slate-600">
+                <div className="flex-1 min-w-0">
+                  {isEditingTitle && isAdmin ? (
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                      <input
+                        type="text"
+                        value={titleEditValue}
+                        onChange={(e) => setTitleEditValue(e.target.value)}
+                        className="flex-1 min-w-[280px] max-w-xl px-3 py-1.5 text-xs sm:text-sm font-bold border-2 border-blue-500 rounded-xl bg-white shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-900"
+                        placeholder="નવું હેડિંગ / તારીખ દાખલ કરો..."
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSaveTitle(titleEditValue)}
+                        className="px-3.5 py-1.5 text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>સેવ કરો</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingTitle(false)}
+                        className="px-3 py-1.5 text-xs font-bold bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl transition-all cursor-pointer"
+                      >
+                        રદ કરો
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                        {currentSheetTitle}
+                      </h2>
+                      {isAdmin && isSheetConfigKey && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTitleEditValue(currentSheetTitle);
+                            setIsEditingTitle(true);
+                          }}
+                          title="આ હેડિંગ અથવા તારીખ સીધું બદલવા માટે ક્લિક કરો"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-300 rounded-lg cursor-pointer transition-colors shadow-2xs"
+                        >
+                          <Pencil className="w-3 h-3" />
+                          <span>હેડિંગ બદલો</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-xs font-bold text-slate-600 mt-0.5">
                     {activeSheet} • પેન્ડિંગ કેસો: <strong className="text-blue-900 font-mono text-sm">{data[activeSheet]?.length ? data[activeSheet].length - 2 : 0}</strong>
                   </p>
                 </div>
@@ -1031,6 +1134,7 @@ export default function App() {
           isOpen={isAddModalOpen}
           currentSheetKey={(activeSheet === 'SUMMARY' || activeSheet === 'DISPOSED ARCHIVE' || activeSheet === 'CALENDAR') ? 'HC CASE' : (activeSheet as SheetKey)}
           advocateList={advocateOptions}
+          customHeaders={currentHeaders}
           onClose={() => setIsAddModalOpen(false)}
           onSubmit={handleAddCase}
         />

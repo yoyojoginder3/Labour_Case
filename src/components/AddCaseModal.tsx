@@ -7,6 +7,7 @@ interface AddCaseModalProps {
   isOpen: boolean;
   currentSheetKey: SheetKey;
   advocateList: string[];
+  customHeaders?: string[];
   onClose: () => void;
   onSubmit: (targetSheet: SheetKey, newRow: string[]) => void;
 }
@@ -15,6 +16,7 @@ export const AddCaseModal: React.FC<AddCaseModalProps> = ({
   isOpen,
   currentSheetKey,
   advocateList,
+  customHeaders,
   onClose,
   onSubmit
 }) => {
@@ -31,7 +33,9 @@ export const AddCaseModal: React.FC<AddCaseModalProps> = ({
   if (!isOpen) return null;
 
   const currentConfig = SHEET_CONFIGS[targetSheet];
-  const headers = currentConfig.headers;
+  const headers = (targetSheet === currentSheetKey && customHeaders && customHeaders.length > 0)
+    ? customHeaders
+    : currentConfig.headers;
 
   const handleFieldChange = (key: string, val: string) => {
     setFormData((prev) => ({ ...prev, [key]: val }));

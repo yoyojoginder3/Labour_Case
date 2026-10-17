@@ -40,8 +40,19 @@ export const TableView: React.FC<TableViewProps> = ({
   onMoveToArchive,
   isAdmin
 }) => {
-  const statusColIndex = sheetKey === 'HC CASE' ? 10 : 6;
-  const advocateColIndex = sheetKey === 'HC CASE' ? 4 : 3;
+  const statusColIndex = React.useMemo(() => {
+    const idx = headers.findIndex((h) => 
+      h.includes('સ્ટેટસ') || h.includes('પરિસ્થિતી') || h.toLowerCase().includes('status')
+    );
+    return idx !== -1 ? idx : (sheetKey === 'HC CASE' ? 10 : 6);
+  }, [headers, sheetKey]);
+
+  const advocateColIndex = React.useMemo(() => {
+    const idx = headers.findIndex((h) => 
+      h.includes('એડવોકેટ') || h.toLowerCase().includes('advocate')
+    );
+    return idx !== -1 ? idx : (sheetKey === 'HC CASE' ? 4 : 3);
+  }, [headers, sheetKey]);
 
   const headerBg =
     sheetKey === 'HC CASE'

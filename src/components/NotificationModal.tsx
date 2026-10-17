@@ -17,7 +17,8 @@ import {
   ShieldCheck, 
   ExternalLink,
   Smartphone,
-  Share2
+  Share2,
+  Filter
 } from 'lucide-react';
 
 export interface UrgentHearing {
@@ -166,30 +167,58 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({
     return a.parsedDate.getTime() - b.parsedDate.getTime();
   });
 
-  // 1 Day before (Tomorrow) hearings or nearest next hearing date
-  const tomorrowHearings = allUpcomingHearings.filter(h => h.dayDiff === 1);
-  const todayHearings = allUpcomingHearings.filter(h => h.dayDiff === 0);
-  
-  // Nearest upcoming list if today/tomorrow have none in static dataset
-  const nearestHearings = allUpcomingHearings.slice(0, 5);
-  const targetAlertList = tomorrowHearings.length > 0 ? tomorrowHearings : (todayHearings.length > 0 ? todayHearings : nearestHearings);
-  const alertTargetDate = targetAlertList[0]?.rawDate || 'આગામી તારીખ';
+  // 7 Days Filtering Logic (Addressing user request to show only hearings in the 7 days window)
+  const upcoming7Hearings = allUpcomingHearings.filter(h => h.dayDiff >= 0 && h.dayDiff <= 7);
+  const past7Hearings = allUpcomingHearings
+    .filter(h => h.dayDiff >= -7 && h.dayDiff < 0)
+    .sort((a, b) => (b.parsedDate?.getTime() || 0) - (a.parsedDate?.getTime() || 0));
+  const all7Hearings = allUpcomingHearings.filter(h => h.dayDiff >= -7 && h.dayDiff <= 7);
+
+  const [filterTab, setFilterTab] = useState<'upcoming_7' | 'past_7' | 'all_7' | 'all'>('upcoming_7');
+
+  let targetAlertList: UrgentHearing[] = [];
+  let filterTitle = '';
+  if (filterTab === 'upcoming_7') {
+    targetAlertList = upcoming7Hearings;
+    filterTitle = 'આગામી ૭ દિવસ (Next 7 Days)';
+  } else if (filterTab === 'past_7') {
+    targetAlertList = past7Hearings;
+    filterTitle = 'છેલ્લા ૭ દિવસ (Last 7 Days)';
+  } else if (filterTab === 'all_7') {
+    targetAlertList = all7Hearings;
+    filterTitle = '૭ દિવસની અંદર તમામ કેસો (±૭ દિવસ)';
+  } else {
+    targetAlertList = allUpcomingHearings;
+    filterTitle = 'બધી જ મુદતો (તમામ વર્ષો)';
+  }
+
+  const alertTargetDate = targetAlertList[0]?.rawDate || (filterTab === 'upcoming_7' ? 'આગામી ૭ દિવસ' : '૭ દિવસ');
 
   // Generate WhatsApp Message text
   const generateWhatsAppMessage = () => {
     let msg = `🏛️ *GSRTC સુરત વિભાગ • લેબર શાખા* 🏛️\n`;
-    msg += `⚠️ *કોર્ટ મુદત એલર્ટ (Court Hearing Reminder)*\n`;
-    msg += `📅 *તારીખ:* ${alertTargetDate}\n`;
+    msg += `⚠️ *કોર્ટ મુદત એલર્ટ (${filterTitle})*\n`;
     msg += `📊 *કુલ કેસો:* ${targetAlertList.length}\n`;
     msg += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
 
-    targetAlertList.forEach((h, idx) => {
-      msg += `*${idx + 1}. કેસ નં:* ${h.caseNo}\n`;
-      msg += `   🏛️ *કોર્ટ:* ${h.court}\n`;
-      msg += `   👤 *એડવોકેટ:* ${h.advocate}\n`;
-      msg += `   👥 *પક્ષકાર:* ${h.applicant}\n`;
-      msg += `   ⚖️ *સ્ટેજ:* ${h.status.split('\n')[0]}\n\n`;
-    });
+    if (targetAlertList.length === 0) {
+      msg += `આ સમયગાળામાં કોઈ પેન્ડિંગ મુદત નથી.\n\n`;
+    } else {
+      targetAlertList.forEach((h, idx) => {
+        let tag = '';
+        if (h.dayDiff === 0) tag = ' [આજે મુદત]';
+        else if (h.dayDiff === 1) tag = ' [આવતીકાલે મુદત]';
+        else if (h.dayDiff > 1 && h.dayDiff <= 7) tag = ` [${h.dayDiff} દિવસ બાકી]`;
+        else if (h.dayDiff < 0 && h.dayDiff >= -7) tag = ` [${Math.abs(h.dayDiff)} દિવસ પહેલાં]`;
+
+        msg += `*${idx + 1}. કેસ નં:* ${h.caseNo}${tag}\n`;
+        msg += `   📅 *તારીખ:* ${h.rawDate}\n`;
+        msg += `   🏛️ *કોર્ટ:* ${h.court}\n`;
+        msg += `   👤 *એડવોકેટ:* ${h.advocate}\n`;
+        msg += `   👥 *પક્ષકાર:* ${h.applicant}\n`;
+        msg += `   ⚖️ *સ્ટેજ:* ${h.status.split('\n')[0]}\n\n`;
+      });
+    }
 
     msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
     msg += `📌 *સંદેશ:* કૃપા કરીને જરૂરી ફાઈલો તૈયાર રાખી સમયસર કોર્ટમાં ઉપસ્થિત રહેવું.\n`;
@@ -377,12 +406,91 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({
             </button>
           </div>
 
+          {/* 7-Days Filter Tabs */}
+          <div className="space-y-2 pt-1">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                <Filter className="w-4 h-4 text-amber-600" />
+                <span>મુદત સમયગાળો (૭ દિવસ ફિલ્ટર):</span>
+              </label>
+              <span className="text-[11px] font-bold text-amber-900 bg-amber-100 px-2.5 py-0.5 rounded-full border border-amber-300">
+                {targetAlertList.length} કેસો મળ્યા
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <button
+                type="button"
+                onClick={() => setFilterTab('upcoming_7')}
+                style={{
+                  backgroundColor: filterTab === 'upcoming_7' ? '#16a34a' : '#f8fafc',
+                  color: filterTab === 'upcoming_7' ? '#ffffff' : '#334155',
+                  border: filterTab === 'upcoming_7' ? '2px solid #15803d' : '1.5px solid #cbd5e1'
+                }}
+                className="p-2 rounded-2xl text-xs font-black transition-all flex flex-col items-center justify-center gap-0.5 shadow-xs cursor-pointer hover:border-emerald-500"
+              >
+                <span>આગામી ૭ દિવસ</span>
+                <span className={`text-[10px] font-mono px-2 py-0.2 rounded-full ${filterTab === 'upcoming_7' ? 'bg-white/25 text-white' : 'bg-emerald-100 text-emerald-800 font-bold'}`}>
+                  {upcoming7Hearings.length} કેસો
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFilterTab('past_7')}
+                style={{
+                  backgroundColor: filterTab === 'past_7' ? '#2563eb' : '#f8fafc',
+                  color: filterTab === 'past_7' ? '#ffffff' : '#334155',
+                  border: filterTab === 'past_7' ? '2px solid #1d4ed8' : '1.5px solid #cbd5e1'
+                }}
+                className="p-2 rounded-2xl text-xs font-black transition-all flex flex-col items-center justify-center gap-0.5 shadow-xs cursor-pointer hover:border-blue-500"
+              >
+                <span>છેલ્લા ૭ દિવસ</span>
+                <span className={`text-[10px] font-mono px-2 py-0.2 rounded-full ${filterTab === 'past_7' ? 'bg-white/25 text-white' : 'bg-blue-100 text-blue-800 font-bold'}`}>
+                  {past7Hearings.length} કેસો
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFilterTab('all_7')}
+                style={{
+                  backgroundColor: filterTab === 'all_7' ? '#ea580c' : '#f8fafc',
+                  color: filterTab === 'all_7' ? '#ffffff' : '#334155',
+                  border: filterTab === 'all_7' ? '2px solid #c2410c' : '1.5px solid #cbd5e1'
+                }}
+                className="p-2 rounded-2xl text-xs font-black transition-all flex flex-col items-center justify-center gap-0.5 shadow-xs cursor-pointer hover:border-orange-500"
+              >
+                <span>કુલ ૭ દિવસ (±૭)</span>
+                <span className={`text-[10px] font-mono px-2 py-0.2 rounded-full ${filterTab === 'all_7' ? 'bg-white/25 text-white' : 'bg-orange-100 text-orange-800 font-bold'}`}>
+                  {all7Hearings.length} કેસો
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFilterTab('all')}
+                style={{
+                  backgroundColor: filterTab === 'all' ? '#475569' : '#f8fafc',
+                  color: filterTab === 'all' ? '#ffffff' : '#64748b',
+                  border: filterTab === 'all' ? '2px solid #334155' : '1.5px solid #cbd5e1'
+                }}
+                className="p-2 rounded-2xl text-xs font-black transition-all flex flex-col items-center justify-center gap-0.5 shadow-xs cursor-pointer hover:border-slate-500"
+              >
+                <span>તમામ મુદતો</span>
+                <span className={`text-[10px] font-mono px-2 py-0.2 rounded-full ${filterTab === 'all' ? 'bg-white/25 text-white' : 'bg-slate-200 text-slate-700 font-bold'}`}>
+                  {allUpcomingHearings.length} કેસો
+                </span>
+              </button>
+            </div>
+          </div>
+
           {/* Immediate Hearings List */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label className="block text-xs font-black text-slate-800 flex items-center gap-1.5">
                 <AlertTriangle className="w-4 h-4 text-amber-600" />
-                <span>મુદત યાદી ({alertTargetDate} ના રોજ {targetAlertList.length} કેસો):</span>
+                <span>{filterTitle} ({targetAlertList.length} કેસો):</span>
               </label>
               <span className="text-[11px] font-bold text-slate-500">
                 કોર્ટમાં જવા માટે તૈયારી કરો
@@ -390,60 +498,94 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({
             </div>
 
             <div className="space-y-2 max-h-60 overflow-y-auto pr-1 scrollbar-thin">
-              {targetAlertList.map((h, idx) => (
-                <div
-                  key={idx}
-                  onClick={() => {
-                    onSelectCase(h.sheetKey, h.originalIndex);
-                    onClose();
-                  }}
-                  style={{
-                    backgroundColor: '#ffffff',
-                    border: '2px solid #e2e8f0'
-                  }}
-                  className="p-3 rounded-2xl hover:border-amber-400 hover:shadow-md transition-all cursor-pointer flex items-center justify-between gap-3"
-                >
-                  <div className="space-y-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span 
-                        style={{
-                          backgroundColor: h.sheetKey === 'HC CASE' ? '#dbeafe' : '#d1fae5',
-                          color: h.sheetKey === 'HC CASE' ? '#1e40af' : '#065f46'
-                        }}
-                        className="text-[10px] font-black px-2 py-0.5 rounded-lg"
-                      >
-                        {h.court}
-                      </span>
-                      <span className="text-xs font-black text-slate-900 font-mono">
-                        {h.caseNo}
-                      </span>
-                      <span 
-                        style={{ backgroundColor: '#fef08a', color: '#713f12' }}
-                        className="text-[10px] font-black px-2 py-0.5 rounded-md font-mono"
-                      >
-                        {h.rawDate}
-                      </span>
-                    </div>
-
-                    <div className="text-xs text-slate-700 font-bold truncate">
-                      એડવોકેટ: <strong className="text-purple-900">{h.advocate}</strong> • પક્ષકાર: <strong className="text-slate-900">{h.applicant}</strong>
-                    </div>
-
-                    <div className="text-[11px] text-amber-900 font-extrabold truncate">
-                      સ્ટેજ: {h.status.split('\n')[0]}
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    style={{ backgroundColor: '#1d4ed8', color: '#ffffff' }}
-                    className="p-2 rounded-xl text-xs font-bold shrink-0 hover:bg-blue-700"
-                    title="કેસ ફાઈલ જુઓ"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </button>
+              {targetAlertList.length === 0 ? (
+                <div className="p-8 text-center text-slate-500 bg-slate-50 rounded-2xl border border-dashed border-slate-300">
+                  <p className="text-sm font-bold">આ ફિલ્ટરમાં કોઈ મુદત પેન્ડિંગ નથી.</p>
+                  <p className="text-xs text-slate-400 mt-1">બીજું ટેબ સિલેક્ટ કરીને કેસો જોઈ શકો છો.</p>
                 </div>
-              ))}
+              ) : (
+                targetAlertList.map((h, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => {
+                      onSelectCase(h.sheetKey, h.originalIndex);
+                      onClose();
+                    }}
+                    style={{
+                      backgroundColor: '#ffffff',
+                      border: '2px solid #e2e8f0'
+                    }}
+                    className="p-3 rounded-2xl hover:border-amber-400 hover:shadow-md transition-all cursor-pointer flex items-center justify-between gap-3"
+                  >
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span 
+                          style={{
+                            backgroundColor: h.sheetKey === 'HC CASE' ? '#dbeafe' : '#d1fae5',
+                            color: h.sheetKey === 'HC CASE' ? '#1e40af' : '#065f46'
+                          }}
+                          className="text-[10px] font-black px-2 py-0.5 rounded-lg"
+                        >
+                          {h.court}
+                        </span>
+                        <span className="text-xs font-black text-slate-900 font-mono">
+                          {h.caseNo}
+                        </span>
+                        <span 
+                          style={{ backgroundColor: '#fef08a', color: '#713f12' }}
+                          className="text-[10px] font-black px-2 py-0.5 rounded-md font-mono"
+                        >
+                          {h.rawDate}
+                        </span>
+
+                        {/* Relative Day Tag */}
+                        {h.dayDiff === 0 && (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-rose-500 text-white animate-pulse">
+                            🔴 આજે મુદત
+                          </span>
+                        )}
+                        {h.dayDiff === 1 && (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-amber-500 text-white font-bold">
+                            🟠 આવતીકાલે મુદત
+                          </span>
+                        )}
+                        {h.dayDiff > 1 && h.dayDiff <= 7 && (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-emerald-600 text-white font-bold">
+                            🟢 {h.dayDiff} દિવસ બાકી
+                          </span>
+                        )}
+                        {h.dayDiff < 0 && h.dayDiff >= -7 && (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-blue-600 text-white font-bold">
+                            🔵 {Math.abs(h.dayDiff)} દિવસ પહેલાં
+                          </span>
+                        )}
+                        {h.dayDiff > 7 && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">
+                            {h.dayDiff} દિવસ પછી
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="text-xs text-slate-700 font-bold truncate">
+                        એડવોકેટ: <strong className="text-purple-900">{h.advocate}</strong> • પક્ષકાર: <strong className="text-slate-900">{h.applicant}</strong>
+                      </div>
+
+                      <div className="text-[11px] text-amber-900 font-extrabold truncate">
+                        સ્ટેજ: {h.status.split('\n')[0]}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      style={{ backgroundColor: '#1d4ed8', color: '#ffffff' }}
+                      className="p-2 rounded-xl text-xs font-bold shrink-0 hover:bg-blue-700"
+                      title="કેસ ફાઈલ જુઓ"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
