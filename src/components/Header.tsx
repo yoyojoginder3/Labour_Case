@@ -15,6 +15,7 @@ import {
   RotateCcw, 
   ChevronDown, 
   FileSpreadsheet,
+  UserCheck,
   Lock,
   ShieldCheck,
   Eye,
@@ -30,7 +31,7 @@ interface HeaderProps {
   onOpenExcelUpload: () => void;
   onOpenNotifications: () => void;
   urgentNotificationCount?: number;
-  onExportExcel: (mode: 'all' | 'current' | 'pending' | 'disposed') => void;
+  onExportExcel: (mode: 'all' | 'current' | 'pending' | 'disposed' | 'dossier') => void;
   onImportExcel: (file: File) => void;
   onPrintCauseList: () => void;
   onResetData: () => void;
@@ -313,6 +314,16 @@ export const Header: React.FC<HeaderProps> = ({
                     className="absolute right-0 mt-1.5 w-60 sm:w-64 rounded-2xl shadow-2xl py-1.5 z-40 text-xs text-slate-800 font-bold"
                     onClick={() => setShowExportMenu(false)}
                   >
+                    <button
+                      onClick={() => onExportExcel('dossier')}
+                      className="w-full px-3.5 py-2.5 text-left hover:bg-purple-50 hover:text-purple-900 flex items-center gap-2.5 border-b border-slate-200 bg-purple-50/60 transition-colors"
+                    >
+                      <UserCheck className="w-4 h-4 text-purple-700 shrink-0" />
+                      <div className="min-w-0">
+                        <div className="font-black text-purple-950 text-xs">📋 કર્મચારી સેવા & શિસ્ત Dossier Excel</div>
+                        <div className="text-[10px] text-purple-700 font-medium leading-tight">કર્મચારી નામ, જન્મ તારીખ, PF, નિમણુક, શિક્ષા, અપીલ સહિત તમામ વિગતો</div>
+                      </div>
+                    </button>
                     <button
                       onClick={() => onExportExcel('all')}
                       className="w-full px-3.5 py-2 text-left hover:bg-emerald-50 hover:text-emerald-900 flex items-center gap-2 border-b border-slate-100"

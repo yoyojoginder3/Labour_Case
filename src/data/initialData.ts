@@ -1,4 +1,4 @@
-import { SheetDataMap, SheetMetaMap, SheetConfig, SheetKey } from '../types/case';
+import { SheetDataMap, SheetMetaMap, SheetConfig, SheetKey, EmployeeProfile } from '../types/case';
 
 export const SHEET_CONFIGS: Record<SheetKey, SheetConfig> = {
   'HC CASE': {
@@ -79,7 +79,7 @@ export const SHEET_CONFIGS: Record<SheetKey, SheetConfig> = {
 export const RAW_INITIAL_DATA: SheetDataMap = {
   "HC CASE": [
     ["નામ. હાઈકોર્ટ સમક્ષના સુરત વિભાગના પડતર તમામ કેસોની માહિતી. (તા. ૦૫/૧૦/૨૦૨૬ સુધી)  ", "", "", "", "", "", "", "", "", "", ""],
-    ["ક્રમ નં.", "HCE\nફાઈલ\nNo.", "આઈટી/લેબર/WC/ગ્રેજ્યુ/ દિ.દાવા/ક્રીમી. તથા અન્ય નીચલી કોર્ટના ચુકાદા", "SCA/LPA/FA/SA No.", "નિગમના પેનલ એડવોકેટનું  નામ", "કામદાર/ અરજદાર/ પાર્ટીનું નામ ", "કેસની ટૂંકી વિગત ", "વિભાગ/શાખા દ્વારા એડવોકેટશ્રીને પેપર્સ સુપ્રત કર્યા પત્ર નં. અને તારીખ", "નામ. હાઈકોર્ટના વચગાળાના ચુકાદાની ટૂંકી વિગત", "નિગમ દ્વારા હાઈકોર્ટમાં એફિડેવિટ કર્યા તારીખ ", "કેસનું સ્ટેટસ"],
+    ["ક્રમ નં.", "HCE\nફાઈલ\nNo.", "આઈટી/લેબર/WC/ગ્રેજ્યુ/ દિ.દાવા/ક્રીમી. તથા અન્ય નીચલી કોર્ટના ચુકાદા", "SCA/LPA/FA/SA No.", "નિગમના પેનલ એડવોકેટનું નામ", "કામદાર/ અરજદાર/ પાર્ટીનું નામ ", "કેસની ટૂંકી વિગત ", "વિભાગ/શાખા દ્વારા એડવોકેટશ્રીને પેપર્સ સુપ્રત કર્યા પત્ર નં. અને તારીખ", "નામ. હાઈકોર્ટના વચગાળાના ચુકાદાની ટૂંકી વિગત", "નિગમ દ્વારા હાઈકોર્ટમાં એફિડેવિટ કર્યા તારીખ ", "કેસનું સ્ટેટસ"],
     ["1", "૮૦૩૯", "રેફ.એલ.સી.એસ.  નં.૨૨/૨૦૦૭ નિ.તા.૩૧-૮-૨૨", "૧૨૨૯૨/૨૦૧૨", "વ્યોમા ઝવેરી", "અરજદારઃ- એ.આર.ભામરે   કંડ.૧૭૧ બ.કા.        સામાવાળાઃ-એસ.ટી.સંસ્થા", "ટીકીટ ગેરરીતી બાબતે બરતરફ કરતા પુનઃસ્થાપિત કરવા માટે હાઇકોર્ટ સમક્ષ પીટીશન દાખલ કરેલ છે.", "પત્ર નં.૬૮૬૦, તા.૨૨/૧૧/૨૦૧૨", "-", "", "182-FOR FINAL HEARING\nDATE-21/09/2026"],
     ["2", "૮૮૫૬", "રેફ.એલ.સી.એસ.  નં.૪૨૦/૨૦૦૫ નિ.તા.૩૦-૪-૨૭", "૧૩૨૮૪/૨૦૧૫", "વ્યોમા ઝવેરી", "અરજદારઃ-એ.આર.ગામીત   કંડ.૧૦૨                 સામાવાળાઃ-એસ.ટી.સંસ્થા", "ટીકીટ ગેરરીતી બાબત. બરતરફ કરતા પુનઃસ્થાપિત કરવા માટે હાઇકોર્ટ સમક્ષ પીટીશન દાખલ કરેલ છે.", "પત્ર નં.૭૪૧, તા.૦૨/૧૨/૨૦૧૫", "-", "", "187-FOR FINAL HEARING\nDATE-14/06/2016"],
     ["3", "૮૮૯૨", "એપ્રુવલ આઈ.ટી.  રફ.નં.૪૮૬/૦૬ નિ.તા.૩૦-૬-૧૨", "૧૦૦૬૯/૨૦૧૬", "હિમેશ નાયડું", "અરજદારઃ-એસ.ટી.સંસ્થા સામાવાળાઃ-એમ.એલ.પઠાણ. ડ્રાય.૩૬૬૩", "તા.૦૧/૧/૦૫થી તા.૨૧/૦૭/૦૬ સુધી વગર પરવાનગીએ ગેરહાજર રહેતા રીમુવ ફોર્મ સર્વીસીસ કરેલ.", "પત્ર નં.૭૦, તા.૨૭/૦૧/૨૦૧૬", "-", "૦૭/૬/૨૦૧૬", "182-FOR FINAL HEARING\nDATE- 19/10/2026"],
@@ -122,7 +122,7 @@ export const RAW_INITIAL_DATA: SheetDataMap = {
   ],
   "LABOUR CASE": [
     ["સુરત વિભાગના પડતર લેબર કોર્ટ કેસોની માહિતી. (તા. ૦૫/૧૦/૨૦૨૬ સુધી) ", "", "", "", "", "", ""],
-    ["ક્રમ નં.", "રેફ. નંબર ", "લેબરકોર્ટ", "નિગમના પેનલ એડવોકેટનું  નામ", "કર્મચારીનું નામ \nહોદ્દો/બેજ નં ", "કેસની ટૂંકી વિગત ", "હાલની છેલ્લામાં છેલ્લી પરિસ્થિતી"],
+    ["ક્રમ નં.", "રેફ. નંબર ", "લેબરકોર્ટ", "નિગમના પેનલ એડવોકેટનું નામ", "કર્મચારીનું નામ \nહોદ્દો/બેજ નં ", "કેસની ટૂંકી વિગત ", "હાલની છેલ્લામાં છેલ્લી પરિસ્થિતી"],
     ["1", "૩૦૪/૨૦૨૨", "અમદાવાદ", "પી.એફ. ઝવેરી", "શ્રી જી.એસ.પરમાર\nકંડકટર-૪૭૫૨ ", "તા.૨૮/૧૨/૨૦૧૯ના રોજ વડોદરા ડેપોની શિર્ડી-વડોદરા રૂટની ફરજ માં યેવલા ટોલનાકા ખાતે બસ ચેક થતાં શિર્ડીથી માલેગાંવ જનાર  એક ગૃપના ૧૨-મુસાફરોના ગૃપના પ્રમુખ મુસાફર પાસેથી ૧-ટીકીટના રૂ|.૧૨૦/-લેખે ૧૨-ટીકીટના રૂ|.૧૪૪૦/-મુસાફરોના બેસવાના સ્થળેથી વસુલ કરેલ હોવા છતાં ચેકીંગ સ્થળ સુધી ટીકીટ આપેલ ન હતી.", "For Argument of First Party                   \nDate- 24/09/2026\n"],
     ["2", "૧૧૭/૨૦૨૪", "સુરત", "ટી. એલ. હાલારી", "શ્રી વાય.જે.પ્રણામી\nફિ.પ. કંડકટર-૨૪૨", "તા.૦૧/૦૫/૨૦૧૯ થી તા.૧૮/૦૬/૨૦૧૯ સુધી કોઈપણ ઉપલા અધિકારીશ્રીની પૂર્વ મંજુરી મેળવ્યા વિના મનસ્વીપણે ગેરહાજર રહેતાં વહીવટ તથા મુસાફર જનતાને અગવડતામાં મુકાવું પડેલ.", "For Argument of Applicant                         \nDate- 29/09/2026\n\n\n"],
     ["3", "૧૮૭/૨૦૨૪", "સુરત", "ટી. એલ. હાલારી", "શ્રી એન.ડી.તેરૈયા\nફિ.પ. ડ્રાયવર-૮૧૦", "તા.૨૬/૦૮/૨૦૨૨ થી તા.૧૬/૦૨/૨૦૨૩ સુધી કોઈપણ ઉપલા અધિકારીશ્રીની પૂર્વ મંજુરી મેળવ્યા વિના મનસ્વીપણે ગેરહાજર રહેતાં વહીવટ તથા મુસાફર જનતાને અગવડતામાં મુકાવું પડેલ.", "For Statement of claim                            \nDate-15/10/2026\n"],
@@ -132,7 +132,7 @@ export const RAW_INITIAL_DATA: SheetDataMap = {
   ],
   "IT CASE": [
     ["સુરત વિભાગના પડતર આઈ.ટી. કોર્ટ કેસોની માહિતી. (તા. ૦૫/૧૦/૨૦૨૬ સુધી)  ", "", "", "", "", "", ""],
-    ["ક્રમ નં.", "રેફ. નંબર ", "લેબરકોર્ટ", "નિગમના પેનલ એડવોકેટનું  નામ", "કર્મચારીનું નામ \nહોદ્દો/બેજ નં ", "કેસની ટૂંકી વિગત ", "હાલની છેલ્લામાં છેલ્લી પરિસ્થિતી"],
+    ["ક્રમ નં.", "રેફ. નંબર ", "લેબરકોર્ટ", "નિગમના પેનલ એડવોકેટનું નામ", "કર્મચારીનું નામ \nહોદ્દો/બેજ નં ", "કેસની ટૂંકી વિગત ", "હાલની છેલ્લામાં છેલ્લી પરિસ્થિતી"],
     ["1", "૧૯/૨૦૨૪", "સુરત", "ટી. એલ. હાલારી", "શ્રી કે.ડી.પટેલ\nકંડકટર-૨૧૧૯ ", "તા.૨૦/૦૪/૨૦૧૭ ના રોજની ફરજ મુંબઈ થી ડુંગરપુર રૂટ ઉપર હતી ત્યારે ૧૭:૪૦ કલાકે તમારી બસ નવસારી ખાતે ચેક કરતાં બસમાં ૪૬+૨ બાળક+૧ મુસાફરી પાસ મુસાફરો પૈકી એક જ ગૃપના ૨-મહીલા પ્રવાસી ચીખલીથી વડોદરાની મુસાફરી કરતાં પાસેથી બેસવાના સ્થળ ચીખલીથી ૧-ટીકીટ રૂ|.૧૬૧/- પ્રમાણે ૨-ટીકીટના રૂ|.૩૨૨/- વસુલ કરેલ હોવા છતાં ચેકિંગ સ્થળ નવસારી સુધી ટીકીટ આપેલ ન હતી.", "\nCase Disposed      \nDate-30/06/2026\n"],
     ["2", "૦૧/૨૦૨૫", "સુરત", "ટી. એલ. હાલારી", "શ્રી એ.એ.સૈયદ  જુની.કલાર્ક", "માંડવી કેન્દ્ર ખાતેની જુ.કલાર્કની ફરજમાં તેઓ તા.૨/૨/૨૦૨૧થી તા.૨૬/૨/૨૦૨૧ સુધી પુત્રીની પરીક્ષા હોવાથી વલ્લભ વિદ્યાનગર પુત્રી સાથે રહેવા જવાના કારણ સાથે રજાનો રીપોર્ટ રજુ કરેલ, જે ડે.મે.શ્રી દ્વારા મંજુર કરવામાં આવેલ. તેમ છતાં તા.૧૬/૦૨/૨૦૨૧ના રોજ સોનગઢ ખાતે એસ.ટી.ક્રેડીટ સોસાયટીની કારોબારીની મીટીંગમાં તેઓ હાજર રહેલાનો વિડીયો વાયરલ થયેલ. તેમજ અન્ય એક વિડીયોમાં તેઓ અનિલ નિષાદ સાથે સદર મીટીંગ બાબતે વાર્તાલાપ કરતાં જણાય આવેલ. તેઓ વહીવટને ખોટું કામ બતાવી અન્ય કામ માટે રજા ભોગવતાં હોય તેવું જણાતાં તેઓને પત્ર નં.ડીએમએ/માંડવી/વહી/ફરજ/ ૧૮૩/૨૧,તા.૨૨/૨/૨૧થી પત્ર મળ્યેથી તાત્કાલીક ફરજ પર હાજર થવા જાણ કરવામાં આવેલ. તેમ છતાં હાજર થયેલ કે ખુલાસો રજુ કરેલ નથી. ત્યારબાદ તેઓ તા.૨૭/૨/૨૧ થી ગેરહાજર રહેતા ફરજ ઉપર હાજર થવા પત્ર નં.-૧૯૯/૨૧, તા.૧/૩/૨૦૨૧થી નોટીશ મોકલવામાં આવેલ છતાં તેઓ તા.૬/૩/૨૦૨૧ સુધી વગર પરવાનગીએ ગેરહાજર રહેલ. તેઓ તા.૭/૩/૨૧ના રોજ હાજર થઈ તા.૯/૩/૨૧ના રોજ કોઈપણ ઉપરી અધિકારીશ્રીની રજા મેળવ્યા વિના મસ્ટરમાં સી.એલ. માર્ક કરેલ છે. તેમજ આજદીન સુધી ઉપરી અધિકારીશ્રીને રજા બાબતે રૂબરૂ રજા રીપોર્ટ પણ રજુ કરેલ નથી. આમ, ખોટા કારણો દર્શાવી વહીવટને ગેરમાર્ગે દોરી ફરજ ન બજાવતાં રોજિંદી કામગીરી પર સીધી અસર થવા પામે છે. જેની ખોટી છાપ અન્ય કર્મચારીઓ પર થવા પામે છે. જે માટે તેઓ જવાબદાર છે.", "\nCase Disposed         \nDate-12/09/2026  \n\n\n\n"],
     ["3", "૧૫/૨૦૨૫", "સુરત", "ટી. એલ. હાલારી", "શ્રી એસ.એન.શેખ  એ.ટી.આઈ.", "A.T.I.તરીકે પરિવહન શાખાની લાઈન ચેકિંગ નિરીક્ષકની ફરજોમાં તેઓ દ્વારા માહે જુન-૨૦૨૧ના એલ.સી.સમરી રજીસ્ટર મુજબ ૦૩-F.C., ૪૦-F.N.C. તથા ૨૬-અધર્સ  કેસોની નોંધણી કરવામાં આવેલ. પરંતુ ડીફોલ્ટ શાખામાં આપેલ કેસોનું ડીફોલ્ટ રજીસ્ટર ચેક કરતા તેઓ દ્વારા તેમાં ૦૩- F.C., ૧૫- F.N.C. અને ૧૨-અધર્સ કેસો જ ઈસ્યુ કરવામાં આવેલ છે. આમ, તેઓ દ્વારા ૨૫- F.N.C. અને ૧૪-અધર્સ કેસો ઈસ્યુ કરવામાં આવેલ નથી. જે બાબતે તેઓ દ્વારા લોસ ટીકીટ બતાવી મુસાફર પાસેથી દંડ વસુલ કરી રસીદ બનાવી હિસાબી શાખામાં જમા કરાવેલ એમ જણાવેલ છે. જેથી ફરજમાં નિષ્કાળજી અને બેદરકારી દાખવવા બાબતે તેઓ જવાબદાર છે. ", "\nCase Disposed         \nDate-30/06/2026 \n\n"],
@@ -256,8 +256,110 @@ export function getStatusCategory(statusText: string): {
   };
 }
 
-/** Check if row has substantive data (skip empty rows) */
+/** Check if row is a header row (should not be treated as a case) */
+export function isHeaderRow(row: string[]): boolean {
+  if (!row || row.length === 0) return false;
+  const joined = row.join(' ').toLowerCase();
+  return (
+    joined.includes('પેનલ એડવોકેટ') ||
+    joined.includes('ક્રમ નં') ||
+    joined.includes('હાલની છેલ્લામાં છેલ્લી') ||
+    joined.includes('કેસનું સ્ટેટસ') ||
+    joined.includes('ચુકાદાની ટૂંકી વિગત') ||
+    joined.includes('હોદ્દો/બેજ નં') ||
+    joined.includes('પાર્ટીનું નામ') ||
+    joined.includes('રેફ. નંબર')
+  );
+}
+
+/** Check if an extracted advocate name is actually a header label or placeholder */
+export function isInvalidAdvocateName(name: string): boolean {
+  if (!name) return true;
+  const normalized = name.replace(/\s+/g, ' ').trim().toLowerCase();
+  return (
+    normalized === '' ||
+    normalized === '-' ||
+    normalized === '--' ||
+    normalized === '---' ||
+    normalized.includes('પેનલ એડવોકેટ') ||
+    normalized.includes('એડવોકેટનું નામ') ||
+    normalized.includes('વકીલનું નામ') ||
+    normalized.includes('advocate name') ||
+    normalized.includes('panel advocate') ||
+    normalized.includes('ક્રમ નં') ||
+    normalized.includes('ફાઈલ no') ||
+    normalized.includes('કેસ નં') ||
+    normalized.includes('હોદ્દો') ||
+    normalized.includes('વિગત') ||
+    normalized === 'અરજદાર' ||
+    normalized === 'સામાવાળા'
+  );
+}
+
+/** Standardize advocate name spacing so duplicates are prevented */
+export function normalizeAdvocateName(name: string): string {
+  if (!name) return '';
+  return name.replace(/\s+/g, ' ').trim();
+}
+
+/** Check if row has substantive data (skip empty rows and header rows) */
 export function isValidCaseRow(row: string[]): boolean {
   if (!row || row.length === 0) return false;
+  if (isHeaderRow(row)) return false;
   return row.some(cell => typeof cell === 'string' && cell.trim() !== '');
+}
+
+/** Generate a consistent identifier for a case row across sheets */
+export function getCaseKey(sheetKey: string, row: string[], index?: number): string {
+  if (!row || row.length === 0) return `${sheetKey}_${index ?? 0}`;
+  const caseNo = (row[3] || row[1] || '').trim();
+  const fileNo = (row[1] || '').trim();
+  const emp = (row[5] || row[4] || '').trim().slice(0, 25);
+  return `${sheetKey}__${caseNo || fileNo || `row_${index ?? 0}`}__${emp}`.replace(/[\s\n\/\\]+/g, '_');
+}
+
+/** Extract or pre-populate initial employee profile from case row */
+export function extractInitialProfileFromRow(sheetKey: string, row: string[]): EmployeeProfile {
+  let empText = '';
+  let summary = '';
+  if (sheetKey === 'HC CASE') {
+    empText = row[5] || '';
+    summary = row[6] || '';
+  } else {
+    empText = row[4] || '';
+    summary = row[5] || '';
+  }
+
+  let employeeName = empText;
+  let designation = '';
+  if (empText.includes('અરજદારઃ-')) {
+    const after = empText.split('અરજદારઃ-')[1] || '';
+    const beforeOpp = after.split('સામાવાળા')[0] || '';
+    employeeName = beforeOpp.trim();
+  }
+  if (empText.includes('કંડ') || empText.includes('કંડકટર')) {
+    designation = 'કંડકટર';
+  } else if (empText.includes('ડ્રાય') || empText.includes('ડ્રાયવર')) {
+    designation = 'ડ્રાયવર';
+  } else if (empText.includes('કલાર્ક')) {
+    designation = 'જુ.કલાર્ક';
+  }
+
+  let punishmentOrder = '';
+  if (summary.includes('બરતરફ')) punishmentOrder = 'નોકરીમાંથી બરતરફ (Dismissal)';
+  else if (summary.includes('રીમુવ')) punishmentOrder = 'રીમુવ ફોર્મ સર્વીસીસ (Removal)';
+  else if (summary.includes('દંડ')) punishmentOrder = 'દંડ / કપાત';
+
+  return {
+    employeeName: employeeName.split('\n')[0].replace(/સામાવાળા.*/, '').trim(),
+    dob: '',
+    designation: designation || (empText.includes('\n') ? empText.split('\n')[1].trim() : ''),
+    pfNo: '',
+    appointmentDate: '',
+    retirementDate: '',
+    offenseDetails: summary,
+    punishmentOrder,
+    firstAppeal: '',
+    secondAppeal: ''
+  };
 }

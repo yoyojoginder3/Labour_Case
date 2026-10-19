@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, X, LayoutGrid, TableProperties, RotateCcw, Filter, Sparkles, Check } from 'lucide-react';
+import { Search, X, LayoutGrid, TableProperties, RotateCcw, Filter, Sparkles, Check, FileSpreadsheet, UserCheck } from 'lucide-react';
 import { CaseFilter } from '../types/case';
 
 interface FiltersBarProps {
@@ -11,6 +11,7 @@ interface FiltersBarProps {
   onViewModeChange: (mode: 'table' | 'cards') => void;
   filteredCount: number;
   totalInCurrentSheet: number;
+  onExportDossier?: () => void;
 }
 
 export const FiltersBar: React.FC<FiltersBarProps> = ({
@@ -21,7 +22,8 @@ export const FiltersBar: React.FC<FiltersBarProps> = ({
   viewMode,
   onViewModeChange,
   filteredCount,
-  totalInCurrentSheet
+  totalInCurrentSheet,
+  onExportDossier
 }) => {
   const isFiltered =
     Boolean(filter.searchQuery) ||
@@ -106,6 +108,19 @@ export const FiltersBar: React.FC<FiltersBarProps> = ({
             </button>
           )}
 
+          {onExportDossier && (
+            <button
+              type="button"
+              onClick={onExportDossier}
+              style={{ backgroundColor: '#faf5ff', color: '#6b21a8', border: '1.5px solid #c084fc' }}
+              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs font-black rounded-xl hover:bg-purple-100 transition-all shadow-2xs cursor-pointer shrink-0"
+              title="કર્મચારી સેવા અને શિસ્ત વિગતો સાથે અલગ એક્સેલ ડાઉનલોડ કરો"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-purple-600" />
+              <span className="hidden sm:inline">📋 Dossier Excel</span>
+              <span className="sm:hidden">Dossier</span>
+            </button>
+          )}
           {/* View Toggle */}
           <div 
             style={{ backgroundColor: '#f1f5f9', border: '1.5px solid #cbd5e1' }}

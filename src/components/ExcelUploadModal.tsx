@@ -103,7 +103,10 @@ export const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
           const ws = wb.Sheets[sheetName];
           const raw = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1, defval: '' });
           const clean = raw
-            .map((row) => row.map((cell) => String(cell ?? '')))
+            .map((row, rIdx) => row.map((cell) => {
+              const str = String(cell ?? '').trim();
+              return rIdx === 1 ? str.replace(/\s+/g, ' ') : str;
+            }))
             .filter((row, rIdx) => rIdx < 2 || isValidCaseRow(row));
 
           if (clean.length > 0) {

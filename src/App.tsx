@@ -1,13 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import * as XLSX from 'xlsx';
-import { SheetKey, SheetDataMap, SheetMetaMap, CaseFilter, AuthUser } from './types/case';
+import { SheetKey, SheetDataMap, SheetMetaMap, CaseFilter, AuthUser, EmployeeProfile, EmployeeProfileMap } from './types/case';
 import {
   SHEET_CONFIGS,
   RAW_INITIAL_DATA,
   INITIAL_METADATA,
   getStatusCategory,
   extractDateFromStatus,
-  isValidCaseRow
+  isValidCaseRow,
+  isHeaderRow,
+  isInvalidAdvocateName,
+  normalizeAdvocateName,
+  getCaseKey,
+  extractInitialProfileFromRow
 } from './data/initialData';
 import { Header } from './components/Header';
 import { StatsCards } from './components/StatsCards';
@@ -23,11 +28,12 @@ import { ExcelUploadModal } from './components/ExcelUploadModal';
 import { NotificationModal } from './components/NotificationModal';
 import { LoginModal } from './components/LoginModal';
 import { LoginPage } from './components/LoginPage';
-import { Check, AlertCircle, Info, Plus, Download, Landmark, Scale, Gavel, Archive, ShieldCheck, Lock, Bell, MessageSquare, Smartphone, Pencil } from 'lucide-react';
+import { Check, AlertCircle, Info, Plus, Download, Landmark, Scale, Gavel, Archive, ShieldCheck, Lock, Bell, MessageSquare, Smartphone, Pencil, FileSpreadsheet, UserCheck } from 'lucide-react';
 
 const STORAGE_KEY = 'gsrtc_court_cases_data_v3';
 const STORAGE_META_KEY = 'gsrtc_court_cases_meta_v3';
 const STORAGE_USER_KEY = 'gsrtc_court_cases_user_v3';
+const STORAGE_PROFILES_KEY = 'gsrtc_court_cases_profiles_v1';
 
 export default function App() {
   // Always require login whenever any user opens the link
@@ -47,11 +53,34 @@ export default function App() {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleEditValue, setTitleEditValue] = useState('');
 
-  // Load data from localStorage or fallback to default
+  // Employee Service & Disciplinary Dossier profiles state
+  const [employeeProfiles, setEmployeeProfiles] = useState<EmployeeProfileMap>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_PROFILES_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // Fallback
+    }
+    return {};
+  });
+
+  // Load data from localStorage or fallback to default, cleaning any stray header rows
   const [data, setData] = useState<SheetDataMap>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        Object.keys(parsed).forEach((k) => {
+          const sheetKey = k as SheetKey;
+          if (Array.isArray(parsed[sheetKey])) {
+            parsed[sheetKey] = parsed[sheetKey].filter((r: string[], idx: number) => {
+              if (idx < 2) return true;
+              return isValidCaseRow(r) && !isHeaderRow(r);
+            });
+          }
+        });
+        return parsed;
+      }
     } catch {
       // Fallback
     }
@@ -114,15 +143,16 @@ export default function App() {
     }, 3800);
   };
 
-  // Persistent storage sync for case data and metadata only (user must login each time)
+  // Persistent storage sync for case data, metadata, and employee profiles
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
       localStorage.setItem(STORAGE_META_KEY, JSON.stringify(meta));
+      localStorage.setItem(STORAGE_PROFILES_KEY, JSON.stringify(employeeProfiles));
     } catch {
       // Ignore quota errors
     }
-  }, [data, meta]);
+  }, [data, meta, employeeProfiles]);
 
   const isAdmin = currentUser?.role === 'admin';
 
@@ -172,21 +202,33 @@ export default function App() {
     };
   }, [data]);
 
-  // Extract advocate and court options dynamically
+  // Extract advocate and court options dynamically without duplicates or headers
   const { advocateOptions, courtOptions } = useMemo(() => {
-    const advocates = new Set<string>();
-    const courts = new Set<string>();
+    const advocatesMap = new Map<string, string>(); // lowercase key -> single standardized display name
+    const courtsMap = new Map<string, string>();
 
     const extract = (sheetKey: SheetKey, advCol: number, courtCol?: number) => {
       const rows = data[sheetKey] || [];
       for (let i = 2; i < rows.length; i++) {
         const row = rows[i];
-        if (!row || !isValidCaseRow(row)) continue;
-        const adv = (row[advCol] || '').trim();
-        if (adv) advocates.add(adv);
+        if (!row || !isValidCaseRow(row) || isHeaderRow(row)) continue;
+        const rawAdv = row[advCol] || '';
+        if (isInvalidAdvocateName(rawAdv)) continue;
+        const cleanAdv = normalizeAdvocateName(rawAdv);
+        const lowerKey = cleanAdv.toLowerCase();
+        if (cleanAdv && !advocatesMap.has(lowerKey)) {
+          advocatesMap.set(lowerKey, cleanAdv);
+        }
+
         if (courtCol && row[courtCol]) {
-          const court = (row[courtCol] || '').trim();
-          if (court) courts.add(court);
+          const rawCourt = row[courtCol] || '';
+          const cleanCourt = rawCourt.replace(/\s+/g, ' ').trim();
+          if (cleanCourt && cleanCourt !== '-' && !cleanCourt.includes('લેબરકોર્ટ') && !cleanCourt.includes('કોર્ટ')) {
+            const courtKey = cleanCourt.toLowerCase();
+            if (!courtsMap.has(courtKey)) {
+              courtsMap.set(courtKey, cleanCourt);
+            }
+          }
         }
       }
     };
@@ -196,8 +238,8 @@ export default function App() {
     extract('IT CASE', 3, 2);
 
     return {
-      advocateOptions: Array.from(advocates).sort(),
-      courtOptions: Array.from(courts).sort()
+      advocateOptions: Array.from(advocatesMap.values()).sort((a, b) => a.localeCompare(b, 'gu')),
+      courtOptions: Array.from(courtsMap.values()).sort((a, b) => a.localeCompare(b, 'gu'))
     };
   }, [data]);
 
@@ -225,8 +267,9 @@ export default function App() {
       }
 
       if (filter.advocate) {
-        const adv = (row[advCol] || '').trim();
-        if (adv !== filter.advocate) continue;
+        const rawAdv = row[advCol] || '';
+        const cleanAdv = normalizeAdvocateName(rawAdv);
+        if (cleanAdv !== filter.advocate) continue;
       }
 
       if (filter.court && courtCol !== undefined) {
@@ -573,10 +616,125 @@ export default function App() {
   };
 
   // Export to Excel with distinct modes and Legal Landscape print setup
-  const handleExportExcel = (mode: 'all' | 'current' | 'pending' | 'disposed' = 'all') => {
+  const handleExportExcel = (mode: 'all' | 'current' | 'pending' | 'disposed' | 'dossier' = 'all') => {
     try {
       const wb = XLSX.utils.book_new();
 
+      if (mode === 'dossier') {
+        // Comprehensive Employee Service & Disciplinary Dossier Excel Export
+        const dossierRows: string[][] = [
+          [
+            'ગુજરાત રાજ્ય માર્ગ વાહન વ્યવહાર નિગમ (GSRTC) - સુરત વિભાગ • લેબર શાખા',
+            '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''
+          ],
+          [
+            'કર્મચારી સેવા, શિસ્તભંગ કાર્યવાહી અને નામદાર કોર્ટ પડતર કેસોની સંપૂર્ણ વિગતવાર Dossier યાદી',
+            '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''
+          ],
+          [
+            'ક્રમ નં.',
+            'કોર્ટ પ્રકાર',
+            'કેસ / SCA / રેફ. નં.',
+            'HCE / ફાઈલ નં.',
+            'નિગમના પેનલ એડવોકેટનું નામ',
+            'કર્મચારીનું નામ',
+            'જન્મ તારીખ',
+            'હોદ્દો / બેજ નં.',
+            'PF નં.',
+            'નોકરીમાં નિમણુકની તારીખ',
+            'નિવૃત્તિ તારીખ',
+            'ગુનાની વિગત',
+            'શિક્ષાત્મક હુકમ',
+            'પ્રથમ અપીલ',
+            'દ્વિતીય અપીલ',
+            'કેસની ટૂંકી વિગત',
+            'નીચલી કોર્ટ / વચગાળાનો ચુકાદો',
+            'હાલની છેલ્લામાં છેલ્લી પરિસ્થિતી / સ્ટેટસ',
+            'સુનાવણી તારીખ'
+          ]
+        ];
+
+        let serialCount = 1;
+        const allSheetKeys: SheetKey[] = ['HC CASE', 'LABOUR CASE', 'IT CASE', 'DISPOSED ARCHIVE'];
+
+        allSheetKeys.forEach((sKey) => {
+          const rows = data[sKey] || [];
+          for (let rIdx = 2; rIdx < rows.length; rIdx++) {
+            const row = rows[rIdx];
+            if (!row || !isValidCaseRow(row) || isHeaderRow(row)) continue;
+
+            const caseKey = getCaseKey(sKey, row, rIdx);
+            const savedProfile = employeeProfiles[caseKey] || extractInitialProfileFromRow(sKey, row);
+
+            const isHC = sKey === 'HC CASE';
+            const isLabour = sKey === 'LABOUR CASE' || sKey === 'IT CASE';
+
+            const courtType = isHC ? 'હાઈકોર્ટ (HC)' : isLabour ? (sKey === 'LABOUR CASE' ? 'લેબર કોર્ટ' : 'ઔદ્યોગિક ટ્રિબ્યુનલ (IT)') : `નિકાલ (${row[1] || 'Disposed'})`;
+            const caseNo = isHC ? (row[3] || '-') : isLabour ? (row[1] || '-') : (row[2] || '-');
+            const fileNo = isHC ? (row[1] || '-') : '-';
+            const advocate = isHC ? (row[4] || '-') : isLabour ? (row[3] || '-') : (row[3] || '-');
+            const status = isHC ? (row[10] || '-') : isLabour ? (row[6] || '-') : (row[7] || row[6] || '-');
+            const hearingDate = extractDateFromStatus(status) || '-';
+            const lowerCourtOrder = isHC ? (row[2] || row[8] || '-') : (row[2] || '-');
+            const caseSummary = isHC ? (row[6] || '-') : isLabour ? (row[5] || '-') : (row[5] || '-');
+
+            dossierRows.push([
+              serialCount.toString(),
+              courtType,
+              caseNo,
+              fileNo,
+              advocate,
+              savedProfile.employeeName || (isHC ? row[5] : isLabour ? row[4] : row[4]) || '-',
+              savedProfile.dob || '-',
+              savedProfile.designation || '-',
+              savedProfile.pfNo || '-',
+              savedProfile.appointmentDate || '-',
+              savedProfile.retirementDate || '-',
+              savedProfile.offenseDetails || caseSummary,
+              savedProfile.punishmentOrder || '-',
+              savedProfile.firstAppeal || '-',
+              savedProfile.secondAppeal || '-',
+              caseSummary,
+              lowerCourtOrder,
+              status,
+              hearingDate
+            ]);
+            serialCount++;
+          }
+        });
+
+        const ws = XLSX.utils.aoa_to_sheet(dossierRows);
+        ws['!merges'] = [
+          { s: { r: 0, c: 0 }, e: { r: 0, c: 18 } },
+          { s: { r: 1, c: 0 }, e: { r: 1, c: 18 } }
+        ];
+        ws['!cols'] = [
+          { wch: 6 },  // 1. ક્રમ નં.
+          { wch: 16 }, // 2. કોર્ટ પ્રકાર
+          { wch: 18 }, // 3. કેસ નં.
+          { wch: 12 }, // 4. ફાઈલ નં.
+          { wch: 20 }, // 5. એડવોકેટ
+          { wch: 26 }, // 6. કર્મચારી નામ
+          { wch: 14 }, // 7. જન્મ તારીખ
+          { wch: 18 }, // 8. હોદ્દો
+          { wch: 14 }, // 9. PF નં.
+          { wch: 16 }, // 10. નિમણુક તારીખ
+          { wch: 16 }, // 11. નિવૃત્તિ તારીખ
+          { wch: 45 }, // 12. ગુનાની વિગત
+          { wch: 28 }, // 13. શિક્ષાત્મક હુકમ
+          { wch: 24 }, // 14. પ્રથમ અપીલ
+          { wch: 24 }, // 15. દ્વિતીય અપીલ
+          { wch: 40 }, // 16. કેસની ટૂંકી વિગત
+          { wch: 24 }, // 17. નીચલી કોર્ટ ચુકાદો
+          { wch: 28 }, // 18. સ્ટેટસ
+          { wch: 15 }  // 19. સુનાવણી તારીખ
+        ];
+
+        XLSX.utils.book_append_sheet(wb, ws, 'કર્મચારી સેવા & કેસ Dossier');
+        XLSX.writeFile(wb, 'GSRTC_સુરત_કર્મચારી_સેવા_શિસ્ત_અને_કોર્ટ_કેસ_Dossier.xlsx');
+        showToast('📋 કર્મચારી સેવા & શિસ્ત વિગતો સાથે Dossier Excel સફળતાપૂર્વક ડાઉનલોડ થઈ!', 'success');
+        return;
+      }
       if (mode === 'disposed') {
         // Disposed Cases Separate Excel
         const sheetData = data['DISPOSED ARCHIVE'] || [];
@@ -1047,6 +1205,7 @@ export default function App() {
               onViewModeChange={setViewMode}
               filteredCount={currentSheetRows.length}
               totalInCurrentSheet={data[activeSheet]?.length ? data[activeSheet].length - 2 : 0}
+              onExportDossier={() => handleExportExcel('dossier')}
             />
 
             {/* Data View */}
@@ -1115,6 +1274,7 @@ export default function App() {
           headers={currentHeaders}
           rowData={data[activeSheet][detailModalIndex]}
           rowIndex={detailModalIndex}
+          employeeProfile={employeeProfiles[getCaseKey(activeSheet, data[activeSheet][detailModalIndex], detailModalIndex)] || extractInitialProfileFromRow(activeSheet, data[activeSheet][detailModalIndex])}
           isAdmin={isAdmin}
           onClose={() => setDetailModalIndex(null)}
           onSaveRow={handleSaveModalRow}

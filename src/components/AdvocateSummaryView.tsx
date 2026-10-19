@@ -1,6 +1,6 @@
 import React from 'react';
 import { SheetDataMap, SheetKey } from '../types/case';
-import { extractDateFromStatus, getStatusCategory } from '../data/initialData';
+import { extractDateFromStatus, getStatusCategory, isInvalidAdvocateName, normalizeAdvocateName, isHeaderRow } from '../data/initialData';
 import { User, Calendar, ExternalLink, Scale, CheckCircle2, Clock } from 'lucide-react';
 
 interface AdvocateSummaryViewProps {
@@ -112,10 +112,10 @@ export const AdvocateSummaryView: React.FC<AdvocateSummaryViewProps> = ({
     const rows = data[sheetKey] || [];
     for (let i = 2; i < rows.length; i++) {
       const row = rows[i];
-      if (!row || !row.some(c => c.trim())) continue;
-
-      const rawAdv = (row[advCol] || '').trim();
-      const advName = rawAdv || 'અનિર્ણિત / અન્ય';
+      if (!row || !row.some(c => c.trim()) || isHeaderRow(row)) continue;
+      const rawAdv = row[advCol] || '';
+      if (isInvalidAdvocateName(rawAdv)) continue;
+      const advName = normalizeAdvocateName(rawAdv) || 'અનિર્ણિત / અન્ય';
       const status = row[statusCol] || '';
       const isDisposed = status.toLowerCase().includes('disposed') || status.toLowerCase().includes('decision');
       const date = extractDateFromStatus(status);

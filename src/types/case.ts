@@ -57,3 +57,18 @@ export interface DisposedRecord {
   outcome: string;
   fullRow: string[];
 }
+
+export interface EmployeeProfile {
+  employeeName: string;      // કર્મચારીનું નામ
+  dob: string;               // જન્મ તારીખ
+  designation: string;       // હોદ્દો / બેજ નં.
+  pfNo: string;              // PF નં.
+  appointmentDate: string;   // નોકરીમાં નિમણુકની તારીખ
+  retirementDate: string;    // નિવૃત્તિ તારીખ
+  offenseDetails: string;    // ગુનાની વિગત
+  punishmentOrder: string;   // શિક્ષાત્મક હુકમ
+  firstAppeal: string;       // પ્રથમ અપીલ
+  secondAppeal: string;      // દ્વિતીય અપીલ
+}
+
+export type EmployeeProfileMap = Record<string, EmployeeProfile>;
