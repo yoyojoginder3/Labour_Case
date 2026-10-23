@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { SheetKey } from '../types/case';
-import { getStatusCategory, extractDateFromStatus } from '../data/initialData';
-import { Calendar, User, Eye, Trash2, Copy, Check, FileText, ArrowRight } from 'lucide-react';
+import { SheetKey, EmployeeProfileMap } from '../types/case';
+import { getStatusCategory, extractDateFromStatus, getCaseKey } from '../data/initialData';
+import { Calendar, User, Eye, Trash2, Copy, Check, FileText, ArrowRight, Briefcase, Award } from 'lucide-react';
 
 interface CardsViewProps {
   sheetKey: SheetKey;
   rows: Array<{ originalIndex: number; data: string[] }>;
   selectedRowIndex: number | null;
+  employeeProfiles?: EmployeeProfileMap;
   onSelectRow: (originalIndex: number) => void;
   onViewDetails: (originalIndex: number) => void;
   onDeleteRow: (originalIndex: number) => void;
@@ -28,6 +29,7 @@ export const CardsView: React.FC<CardsViewProps> = ({
   sheetKey,
   rows,
   selectedRowIndex,
+  employeeProfiles,
   onSelectRow,
   onViewDetails,
   onDeleteRow
@@ -161,13 +163,66 @@ export const CardsView: React.FC<CardsViewProps> = ({
                   </span>
                 </div>
 
-                <div className="text-slate-800 bg-slate-50/80 p-2.5 rounded-xl border border-slate-200 leading-snug">
-                  <span className="text-[11px] text-slate-500 block mb-0.5 font-bold">
-                    કર્મચારી / અરજદાર:
-                  </span>
-                  <span className="font-semibold text-slate-900 whitespace-pre-wrap">
-                    {applicant || '-'}
-                  </span>
+                <div className="text-slate-800 bg-emerald-50/80 p-2.5 rounded-xl border border-emerald-200 leading-snug space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-emerald-800 font-bold flex items-center gap-1">
+                      <User className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>કર્મચારી / અરજદાર:</span>
+                    </span>
+                  </div>
+                  {(() => {
+                    const caseKey = getCaseKey(sheetKey, rowData, originalIndex);
+                    const profile = employeeProfiles?.[caseKey] || Object.values(employeeProfiles || {}).find(p => 
+                      (p.employeeName && applicant.includes(p.employeeName)) || (p.pfNo && applicant.includes(p.pfNo))
+                    );
+
+                    const empName = profile?.employeeName || (applicant ? (
+                      applicant.includes('અરજદારઃ-') ? applicant.split('અરજદારઃ-')[1].split('(')[0].replace(/સામાવાળા.*/, '').trim() : applicant.split('\n')[0]
+                    ) : '-');
+
+                    const des = profile?.designation || (applicant.includes('\n') 
+                      ? applicant.split('\n')[1].replace(/\[.*\]/, '').replace(/PF:.*/, '').trim()
+                      : (applicant.includes('(') ? applicant.split('(')[1]?.split(')')[0] : ''));
+
+                    const pf = profile?.pfNo || (applicant.match(/PF:?\s*([^|\n\]]+)/i)?.[1]?.trim() || '');
+                    const dob = profile?.dob || (applicant.match(/જન્મ:?\s*([^|\n\]]+)/)?.[1]?.trim() || '');
+                    const dor = profile?.retirementDate || (applicant.match(/નિવૃત્તિ:?\s*([^|\n\]]+)/)?.[1]?.trim() || '');
+
+                    return (
+                      <>
+                        <div className="font-black text-slate-950 text-xs sm:text-sm">
+                          {empName}
+                        </div>
+                        {des && (
+                          <div>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                              <Briefcase className="w-3 h-3 text-amber-700" />
+                              <span>{des}</span>
+                            </span>
+                          </div>
+                        )}
+                        {(pf || dob || dor) && (
+                          <div className="flex flex-wrap gap-1 text-[10px] font-mono font-bold pt-1">
+                            {pf && (
+                              <span className="px-1.5 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-300">
+                                PF: {pf}
+                              </span>
+                            )}
+                            {dob && (
+                              <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-300">
+                                જન્મ: {dob}
+                              </span>
+                            )}
+                            {dor && (
+                              <span className="px-1.5 py-0.5 rounded bg-orange-50 text-orange-800 border border-orange-300">
+                                નિવૃત્તિ: {dor}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
 
                 {/* Summary snippet */}

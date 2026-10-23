@@ -1,13 +1,14 @@
 import React from 'react';
-import { SheetKey } from '../types/case';
-import { getStatusCategory, extractDateFromStatus } from '../data/initialData';
-import { Eye, Trash2, Calendar, FileText, User, Archive, Lock } from 'lucide-react';
+import { SheetKey, EmployeeProfileMap } from '../types/case';
+import { getStatusCategory, extractDateFromStatus, getCaseKey } from '../data/initialData';
+import { Eye, Trash2, Calendar, FileText, User, Archive, Lock, Briefcase, Award } from 'lucide-react';
 
 interface TableViewProps {
   sheetKey: SheetKey;
   headers: string[];
   rows: Array<{ originalIndex: number; data: string[] }>;
   selectedRowIndex: number | null;
+  employeeProfiles?: EmployeeProfileMap;
   onSelectRow: (originalIndex: number) => void;
   onCellChange: (originalIndex: number, colIndex: number, newValue: string) => void;
   onViewDetails: (originalIndex: number) => void;
@@ -33,6 +34,7 @@ export const TableView: React.FC<TableViewProps> = ({
   headers,
   rows,
   selectedRowIndex,
+  employeeProfiles,
   onSelectRow,
   onCellChange,
   onViewDetails,
@@ -52,6 +54,13 @@ export const TableView: React.FC<TableViewProps> = ({
       h.includes('એડવોકેટ') || h.toLowerCase().includes('advocate')
     );
     return idx !== -1 ? idx : (sheetKey === 'HC CASE' ? 4 : 3);
+  }, [headers, sheetKey]);
+
+  const employeeColIndex = React.useMemo(() => {
+    const idx = headers.findIndex((h) => 
+      h.includes('કર્મચારી') || h.includes('કામદાર') || h.includes('અરજદાર') || h.includes('પાર્ટી')
+    );
+    return idx !== -1 ? idx : (sheetKey === 'HC CASE' ? 5 : 4);
   }, [headers, sheetKey]);
 
   const headerBg =
@@ -91,7 +100,6 @@ export const TableView: React.FC<TableViewProps> = ({
               </th>
             </tr>
           </thead>
-
           <tbody style={{ borderColor: '#cbd5e1' }} className="divide-y font-normal">
             {rows.length === 0 ? (
               <tr>
@@ -136,8 +144,10 @@ export const TableView: React.FC<TableViewProps> = ({
                       const val = rowData[cIdx] || '';
                       const isStatusCol = cIdx === statusColIndex;
                       const isAdvocateCol = cIdx === advocateColIndex;
+                      const isEmployeeCol = cIdx === employeeColIndex;
 
                       let cellStyle: React.CSSProperties = { backgroundColor: '#ffffff', color: '#1e293b' };
+
                       if (cIdx === 0) {
                         cellStyle = {
                           backgroundColor: isSelected ? '#bfdbfe' : '#e2e8f0',
@@ -177,7 +187,7 @@ export const TableView: React.FC<TableViewProps> = ({
                               {val || (originalIndex - 1)}
                             </div>
                           ) : isAdvocateCol ? (
-                            <div className="space-y-1">
+                            <div>
                               <span
                                 style={{
                                   backgroundColor: advStyle.background,
@@ -187,27 +197,121 @@ export const TableView: React.FC<TableViewProps> = ({
                                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-black shadow-xs"
                               >
                                 <User className="w-3.5 h-3.5" />
-                                <span>{val}</span>
+                                <span>{val || 'અનિર્ણિત'}</span>
                               </span>
-                              {isAdmin && (
-                                <div
-                                  contentEditable
-                                  suppressContentEditableWarning
-                                  onBlur={(e) =>
-                                    onCellChange(originalIndex, cIdx, e.currentTarget.innerText)
+                            </div>
+                          ) : isEmployeeCol ? (
+                            <div className="space-y-1.5 py-0.5">
+                              {(() => {
+                                const caseKey = getCaseKey(sheetKey, rowData, originalIndex);
+                                const profile = employeeProfiles?.[caseKey] || Object.values(employeeProfiles || {}).find(p => 
+                                  (p.employeeName && val.includes(p.employeeName)) || (p.pfNo && val.includes(p.pfNo))
+                                );
+
+                                const empName = profile?.employeeName || (() => {
+                                  if (val.includes('અરજદારઃ-')) {
+                                    const raw = val.split('અરજદારઃ-')[1] || '';
+                                    return raw.split('(')[0].replace(/સામાવાળા.*/, '').trim();
                                   }
-                                  style={{
-                                    backgroundColor: '#ffffff',
-                                    color: '#0f172a',
-                                    caretColor: '#1d4ed8',
-                                    border: '1.5px solid #2563eb'
-                                  }}
-                                  className="outline-hidden focus:bg-white focus:ring-2 focus:ring-blue-600 p-1 rounded-md text-xs font-bold text-slate-950"
-                                  title="ક્લિક કરી એડવોકેટ સુધારો"
-                                >
-                                  {val}
-                                </div>
-                              )}
+                                  return val.split('\n')[0] || val;
+                                })();
+
+                                const des = profile?.designation || (() => {
+                                  if (val.includes('\n')) {
+                                    return val.split('\n')[1].replace(/\[.*\]/, '').replace(/PF:.*/, '').trim();
+                                  }
+                                  return val.includes('(') ? val.split('(')[1]?.split(')')[0] : '';
+                                })();
+
+                                const pf = profile?.pfNo || (val.match(/PF:?\s*([^|\n\]]+)/i)?.[1]?.trim() || '');
+                                const dob = profile?.dob || (val.match(/જન્મ:?\s*([^|\n\]]+)/)?.[1]?.trim() || '');
+                                const dor = profile?.retirementDate || (val.match(/નિવૃત્તિ:?\s*([^|\n\]]+)/)?.[1]?.trim() || '');
+                                const doa = profile?.appointmentDate || (val.match(/નિમણૂક:?\s*([^|\n\]]+)/)?.[1]?.trim() || '');
+
+                                const otherLines = val.split('\n').filter(line => 
+                                  !line.includes('PF:') && !line.includes('જન્મ:') && !line.includes('નિવૃત્તિ:') &&
+                                  line !== empName && line !== des && !line.startsWith('અરજદારઃ-')
+                                ).join('\n');
+
+                                return (
+                                  <>
+                                    {/* ૧. કર્મચારીનું નામ (Employee Name) */}
+                                    <div className="font-black text-slate-950 text-xs sm:text-[13px] flex items-center gap-1.5 leading-snug">
+                                      <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center shrink-0 border border-emerald-300">
+                                        <User className="w-3 h-3 text-emerald-800" />
+                                      </div>
+                                      <span className="break-words font-black tracking-tight text-slate-900">
+                                        {empName || 'કર્મચારી'}
+                                      </span>
+                                    </div>
+
+                                    {/* ૨. હોદ્દો / બેજ નં. (Designation & Badge) */}
+                                    {des && (
+                                      <div className="flex items-center gap-1">
+                                        <span 
+                                          style={{ backgroundColor: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}
+                                          className="px-2 py-0.5 rounded-md text-[11px] font-black inline-flex items-center gap-1 shadow-2xs"
+                                        >
+                                          <Briefcase className="w-3 h-3 text-amber-700" />
+                                          <span>{des}</span>
+                                        </span>
+                                      </div>
+                                    )}
+
+                                    {/* ૩. PF નં., ૪. જન્મ તારીખ, ૫. નિવૃત્તિ તારીખ - બધી વિગતો એક સાથે */}
+                                    {(pf || dob || dor || doa) && (
+                                      <div className="flex flex-wrap gap-1 text-[10.5px] font-mono font-bold pt-0.5">
+                                        {pf && (
+                                          <span 
+                                            style={{ backgroundColor: '#ccfbf1', color: '#115e59', border: '1px solid #5eead4' }}
+                                            className="px-1.5 py-0.5 rounded-md shadow-2xs inline-flex items-center gap-1"
+                                            title="PF નંબર"
+                                          >
+                                            <Award className="w-3 h-3 text-teal-700" />
+                                            <span>PF: {pf}</span>
+                                          </span>
+                                        )}
+                                        {dob && (
+                                          <span 
+                                            style={{ backgroundColor: '#e0f2fe', color: '#0369a1', border: '1px solid #7dd3fc' }}
+                                            className="px-1.5 py-0.5 rounded-md shadow-2xs inline-flex items-center gap-1"
+                                            title="જન્મ તારીખ"
+                                          >
+                                            <Calendar className="w-3 h-3 text-sky-700" />
+                                            <span>જન્મ: {dob}</span>
+                                          </span>
+                                        )}
+                                        {dor && (
+                                          <span 
+                                            style={{ backgroundColor: '#ffedd5', color: '#9a3412', border: '1px solid #fdba74' }}
+                                            className="px-1.5 py-0.5 rounded-md shadow-2xs inline-flex items-center gap-1"
+                                            title="નિવૃત્તિ તારીખ"
+                                          >
+                                            <Calendar className="w-3 h-3 text-orange-700" />
+                                            <span>નિવૃત્તિ: {dor}</span>
+                                          </span>
+                                        )}
+                                        {doa && (
+                                          <span 
+                                            style={{ backgroundColor: '#e0e7ff', color: '#3730a3', border: '1px solid #c7d2fe' }}
+                                            className="px-1.5 py-0.5 rounded-md shadow-2xs inline-flex items-center gap-1"
+                                            title="નોકરીમાં નિમણૂક તારીખ"
+                                          >
+                                            <Calendar className="w-3 h-3 text-indigo-700" />
+                                            <span>નિમણૂક: {doa}</span>
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    {otherLines && (
+                                      <div className="text-[11px] text-slate-500 font-medium whitespace-pre-wrap pt-0.5">
+                                        {otherLines}
+                                      </div>
+                                    )}
+                                  </>
+                                );
+                              })()}
                             </div>
                           ) : isStatusCol ? (
                             <div className="space-y-1.5">
@@ -233,7 +337,6 @@ export const TableView: React.FC<TableViewProps> = ({
                                   {val}
                                 </div>
                               )}
-
                               <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
                                 <span
                                   style={{
@@ -246,7 +349,6 @@ export const TableView: React.FC<TableViewProps> = ({
                                   <span className={`w-2 h-2 rounded-full ${statusCat.dotClass}`} />
                                   <span>{statusCat.label.split(' ')[0]}</span>
                                 </span>
-
                                 {hearingDate && (
                                   <span
                                     style={{ backgroundColor: '#fef08a', color: '#713f12', border: '1.5px solid #facc15' }}
@@ -277,7 +379,6 @@ export const TableView: React.FC<TableViewProps> = ({
                         </td>
                       );
                     })}
-
                     {/* Actions column with Archive & Delete buttons */}
                     <td
                       style={{ backgroundColor: '#f8fafc', borderLeft: '1px solid #cbd5e1' }}
@@ -291,7 +392,7 @@ export const TableView: React.FC<TableViewProps> = ({
                           }}
                           style={{ backgroundColor: '#2563eb', color: '#ffffff' }}
                           title="કેસ વિગત જુઓ"
-                          className="p-1.5 rounded-lg transition-all shadow-xs hover:brightness-110"
+                          className="p-1.5 rounded-lg transition-all shadow-xs hover:brightness-110 cursor-pointer"
                         >
                           <Eye className="w-3.5 h-3.5" />
                         </button>
@@ -307,7 +408,7 @@ export const TableView: React.FC<TableViewProps> = ({
                             }}
                             style={{ backgroundColor: '#059669', color: '#ffffff' }}
                             title="નિકાલ આર્કાઇવમાં ખસેડો (Move to Disposed Archive)"
-                            className="p-1.5 rounded-lg transition-all shadow-xs hover:brightness-110"
+                            className="p-1.5 rounded-lg transition-all shadow-xs hover:brightness-110 cursor-pointer"
                           >
                             <Archive className="w-3.5 h-3.5" />
                           </button>
@@ -321,7 +422,7 @@ export const TableView: React.FC<TableViewProps> = ({
                             }}
                             style={{ backgroundColor: '#dc2626', color: '#ffffff' }}
                             title="કેસ ડિલીટ કરો"
-                            className="p-1.5 rounded-lg transition-all shadow-xs hover:brightness-110"
+                            className="p-1.5 rounded-lg transition-all shadow-xs hover:brightness-110 cursor-pointer"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -339,7 +440,6 @@ export const TableView: React.FC<TableViewProps> = ({
           </tbody>
         </table>
       </div>
-
       <div
         style={{ background: 'linear-gradient(to right, #fef3c7, #e0f2fe, #d1fae5)', borderTop: '2px solid #cbd5e1' }}
         className="px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-900 font-bold"
@@ -348,7 +448,7 @@ export const TableView: React.FC<TableViewProps> = ({
           <span style={{ backgroundColor: '#059669' }} className="w-3 h-3 rounded-full animate-pulse"></span>
           <span>
             {isAdmin 
-              ? '👑 એડમિન મોડ: કોઈપણ સેલ પર ક્લિક કરી એડિટ કરો • "Archive" આઈકનથી નિકાલ થયેલ કેસ અલગ શીટમાં ખસેડો' 
+              ? '👑 એડમિન મોડ: સેલ પર ક્લિક કરી એડિટ કરો • કર્મચારી ખાનામાં નામ, હોદ્દો, PF, જન્મ અને નિવૃત્તિ તમામ વિગત એક સાથે દેખાય છે' 
               : '👁️ સ્ટાફ મોડ: કેસો સુરક્ષિત રીતે માત્ર વાંચવા માટે ઉપલબ્ધ છે'}
           </span>
         </div>

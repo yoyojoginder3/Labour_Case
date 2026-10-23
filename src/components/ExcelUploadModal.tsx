@@ -15,7 +15,8 @@ import {
   Lock,
   ArrowRight,
   Eye,
-  Download
+  Download,
+  Heading
 } from 'lucide-react';
 
 interface ExcelUploadModalProps {
@@ -34,6 +35,7 @@ interface ParsedSheetInfo {
   rowCount: number;
   previewRows: string[][];
   headers: string[];
+  title: string;
 }
 
 export const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
@@ -85,6 +87,90 @@ export const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
     return 'HC CASE';
   };
 
+  /**
+   * Intelligently normalize uploaded sheet rows:
+   * 1. Detect if row 0 has a banner Title (e.g. "નામ. હાઈકોર્ટ સમક્ષના સુરત વિભાગના પડતર તમામ કેસોની માહિતી. (તા. ૧૭/૧૦/૨૦૨૬ સુધી)")
+   * 2. Detect column headers (row 0 or row 1)
+   * 3. Normalize into: [TitleRow, HeadersRow, ...DataRows]
+   */
+  const processSheetRows = (
+    rawRows: string[][],
+    targetKey: SheetKey
+  ): {
+    normalizedRows: string[][];
+    headers: string[];
+    title: string;
+  } => {
+    const cleanRows = rawRows
+      .map((row) => row.map((cell) => String(cell ?? '').trim()))
+      .filter((row) => row.some((c) => c !== ''));
+
+    const defaultTitle = SHEET_CONFIGS[targetKey]?.title || `${targetKey} કેસોની માહિતી`;
+    const defaultHeaders = SHEET_CONFIGS[targetKey]?.headers || [];
+
+    if (cleanRows.length === 0) {
+      return {
+        normalizedRows: [],
+        headers: defaultHeaders,
+        title: defaultTitle
+      };
+    }
+
+    const row0 = cleanRows[0];
+    const row0NonEmptyCount = row0.filter((c) => c !== '').length;
+    const row0FirstText = (row0[0] || '').trim();
+
+    // Check if row 0 is a Title banner row
+    const row0LooksLikeTitle =
+      (row0NonEmptyCount <= 3 && (row0FirstText.length > 15 || row0FirstText.includes('માહિતી') || row0FirstText.includes('સુધી') || row0FirstText.includes('કેસો') || row0FirstText.includes('GSRTC') || row0FirstText.includes('વિભાગ'))) ||
+      (!row0.some(c => c.includes('ક્રમ') || c.includes('નં') || c.toLowerCase().includes('sr') || c.toLowerCase().includes('no')) && 
+       cleanRows.length > 1 && 
+       cleanRows[1].some(c => c.includes('ક્રમ') || c.includes('નં') || c.toLowerCase().includes('sr') || c.toLowerCase().includes('no')));
+
+    if (row0LooksLikeTitle && cleanRows.length > 1) {
+      // Row 0 is the Title!
+      const title = row0FirstText || defaultTitle;
+      // Row 1 is the Column Headers
+      const rawHeaders = cleanRows[1];
+      // Clean headers up to the last non-empty one
+      let lastIdx = -1;
+      for (let i = rawHeaders.length - 1; i >= 0; i--) {
+        if (rawHeaders[i]) {
+          lastIdx = i;
+          break;
+        }
+      }
+      const headers = lastIdx >= 0 ? rawHeaders.slice(0, lastIdx + 1) : defaultHeaders;
+      const dataRows = cleanRows.slice(2).filter((r) => isValidCaseRow(r));
+
+      // Standardize title row
+      const titleRow = [title, ...Array(Math.max(0, headers.length - 1)).fill('')];
+      return {
+        normalizedRows: [titleRow, headers, ...dataRows],
+        headers,
+        title
+      };
+    } else {
+      // Row 0 is directly the Column Headers!
+      let lastIdx = -1;
+      for (let i = row0.length - 1; i >= 0; i--) {
+        if (row0[i]) {
+          lastIdx = i;
+          break;
+        }
+      }
+      const headers = lastIdx >= 0 ? row0.slice(0, lastIdx + 1) : defaultHeaders;
+      const title = defaultTitle;
+      const dataRows = cleanRows.slice(1).filter((r) => isValidCaseRow(r));
+      const titleRow = [title, ...Array(Math.max(0, headers.length - 1)).fill('')];
+      return {
+        normalizedRows: [titleRow, headers, ...dataRows],
+        headers,
+        title
+      };
+    }
+  };
+
   const handleFile = (file: File) => {
     setErrorMsg('');
     setSelectedFile(file);
@@ -95,32 +181,30 @@ export const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
       try {
         const dataBuffer = e.target?.result;
         const wb = XLSX.read(dataBuffer, { type: 'array' });
-
         const extractedWorkbook: SheetDataMap = {};
         const sheetDetails: ParsedSheetInfo[] = [];
 
         wb.SheetNames.forEach((sheetName, idx) => {
           const ws = wb.Sheets[sheetName];
           const raw = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1, defval: '' });
-          const clean = raw
-            .map((row, rIdx) => row.map((cell) => {
-              const str = String(cell ?? '').trim();
-              return rIdx === 1 ? str.replace(/\s+/g, ' ') : str;
-            }))
-            .filter((row, rIdx) => rIdx < 2 || isValidCaseRow(row));
-
-          if (clean.length > 0) {
+          
+          if (raw.length > 0) {
             const targetKey = resolveTargetKey(sheetName, idx);
-            extractedWorkbook[targetKey] = clean;
+            const { normalizedRows, headers, title } = processSheetRows(raw, targetKey);
 
-            const caseRowCount = Math.max(0, clean.length - 2);
-            sheetDetails.push({
-              sheetName,
-              targetKey,
-              rowCount: caseRowCount,
-              previewRows: clean.slice(2, 5),
-              headers: clean[1] || SHEET_CONFIGS[targetKey].headers
-            });
+            if (normalizedRows.length > 0) {
+              extractedWorkbook[targetKey] = normalizedRows;
+              const caseRowCount = Math.max(0, normalizedRows.length - 2);
+
+              sheetDetails.push({
+                sheetName,
+                targetKey,
+                rowCount: caseRowCount,
+                previewRows: normalizedRows.slice(2, 5),
+                headers,
+                title
+              });
+            }
           }
         });
 
@@ -131,6 +215,7 @@ export const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
           setParsedSheets(sheetDetails);
         }
       } catch (err) {
+        console.error('Excel parse error:', err);
         setErrorMsg('Excel ફાઈલ વાંચવામાં ભૂલ થઈ. કૃપા કરીને માન્ય .xlsx અથવા .xls ફાઈલ પસંદ કરો.');
       } finally {
         setIsProcessing(false);
@@ -162,61 +247,65 @@ export const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
       if (adminPin === '1234' || adminPin === 'admin123' || adminPin === 'gsrtc@123' || adminPin === 'admin') {
         onAdminLoginRequired();
       } else {
-        setPinError('ડેટા અપડેટ કરવા માટે સાચો એડમિન PIN (1234) દાખલ કરો.');
+        setPinError('ખોટો એડમિન PIN. એક્સેલ અપડેટ કરવા માટે સાચો PIN જરૂરી છે.');
         return;
       }
     }
 
     onConfirmImport(rawWorkbookData, importMode);
-    onClose();
   };
 
   const totalCasesDetected = parsedSheets.reduce((sum, s) => sum + s.rowCount, 0);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">
       <div 
-        style={{ backgroundColor: '#ffffff', border: '3px solid #059669' }}
-        className="rounded-3xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+        style={{ backgroundColor: '#ffffff', borderColor: '#cbd5e1' }}
+        className="rounded-3xl border-2 shadow-2xl max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden text-slate-800"
       >
         {/* Header */}
         <div 
-          style={{ background: 'linear-gradient(135deg, #064e3b 0%, #059669 50%, #0d9488 100%)' }}
-          className="p-5 text-white flex items-center justify-between shrink-0 shadow-md"
+          style={{ backgroundColor: '#0f172a', color: '#ffffff' }}
+          className="p-5 flex items-center justify-between shrink-0 border-b border-slate-700"
         >
           <div className="flex items-center gap-3">
             <div 
-              style={{ backgroundColor: '#fef08a', color: '#713f12' }}
-              className="w-11 h-11 rounded-2xl flex items-center justify-center font-black shadow-lg shrink-0"
+              style={{ backgroundColor: '#059669', color: '#ffffff' }}
+              className="p-2.5 rounded-2xl shadow-md"
             >
               <FileSpreadsheet className="w-6 h-6 stroke-[2.5]" />
             </div>
             <div>
-              <h2 className="text-lg sm:text-xl font-black text-white tracking-tight">
-                Excel ફાઈલ અપલોડ & ડેટા અપડેટ (Excel Import)
+              <h2 className="text-base sm:text-lg font-black tracking-tight text-white flex items-center gap-2">
+                <span>Excel ફાઈલ અપલોડ / અપડેટ કરો</span>
+                <span 
+                  style={{ backgroundColor: '#10b981', color: '#064e3b' }}
+                  className="text-[10px] font-black px-2 py-0.5 rounded-md uppercase"
+                >
+                  Legal Landscape
+                </span>
               </h2>
-              <p className="text-xs text-emerald-100 font-semibold mt-0.5">
-                GSRTC સુરત લેબર શાખા • નવી એક્સેલ ફાઈલ અપલોડ કરી કેસો અપડેટ કરો
+              <p className="text-xs text-slate-300 font-medium">
+                નવી એક્સેલ શીટ અપલોડ કરી હેડિંગ, સ્તંભ શીર્ષકો અને કેસોનો ડેટા તાત્કાલિક અપડેટ કરો
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
-            className="p-2 text-white hover:bg-white/30 rounded-xl transition-colors"
+            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
           >
-            <X className="w-5 h-5" />
+            <X className="w-5 h-5 stroke-[2.5]" />
           </button>
         </div>
 
-        {/* Content Body */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 flex-1">
+        {/* Scrollable Body */}
+        <div className="p-5 sm:p-6 overflow-y-auto space-y-5 flex-1 scrollbar-thin">
           {errorMsg && (
             <div 
-              style={{ backgroundColor: '#fff1f2', color: '#9f1239', border: '1.5px solid #f43f5e' }}
-              className="p-3 rounded-2xl text-xs font-bold flex items-center gap-2"
+              style={{ backgroundColor: '#fef2f2', border: '2px solid #f87171' }}
+              className="p-3.5 rounded-2xl flex items-center gap-2.5 text-rose-700 text-xs font-bold"
             >
-              <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+              <AlertCircle className="w-5 h-5 shrink-0 text-rose-600" />
               <span>{errorMsg}</span>
             </div>
           )}
@@ -267,7 +356,7 @@ export const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
             <div className="space-y-4">
               {/* File Info Banner */}
               <div 
-                style={{ backgroundColor: '#ecfdf5', border: '2px solid #6ee7b7' }}
+                style={{ backgroundColor: '#ecfdf5', border: '2px solid #a7f3d0' }}
                 className="p-4 rounded-2xl flex items-center justify-between gap-3"
               >
                 <div className="flex items-center gap-3">
@@ -286,7 +375,6 @@ export const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
                     </p>
                   </div>
                 </div>
-
                 <button
                   type="button"
                   onClick={() => {
@@ -301,12 +389,12 @@ export const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
                 </button>
               </div>
 
-              {/* Detected Sheets Details */}
+              {/* Detected Sheets Details with Titles & Headers preview */}
               <div className="space-y-2">
                 <label className="block text-xs font-black text-slate-800">
-                  અપડેટ થનાર શીટ્સ અને કેસોની સંખ્યા:
+                  અપડેટ થનાર શીટ્સ, હેડિંગ અને કેસોની સંખ્યા:
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                   {parsedSheets.map((s, idx) => (
                     <div
                       key={idx}
@@ -314,24 +402,36 @@ export const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
                         backgroundColor: '#f8fafc',
                         border: '2px solid #cbd5e1'
                       }}
-                      className="p-3 rounded-2xl flex flex-col justify-between"
+                      className="p-3.5 rounded-2xl flex flex-col justify-between shadow-2xs"
                     >
-                      <div className="flex items-center justify-between mb-1">
-                        <span 
-                          style={{
-                            backgroundColor: s.targetKey === 'HC CASE' ? '#dbeafe' : s.targetKey === 'LABOUR CASE' ? '#d1fae5' : '#f3e8ff',
-                            color: s.targetKey === 'HC CASE' ? '#1e40af' : s.targetKey === 'LABOUR CASE' ? '#065f46' : '#6b21a8'
-                          }}
-                          className="text-[11px] font-black px-2 py-0.5 rounded-lg"
-                        >
-                          {s.targetKey}
-                        </span>
-                        <span className="font-mono text-xs font-bold text-slate-500">
-                          {s.sheetName}
-                        </span>
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span 
+                            style={{
+                              backgroundColor: s.targetKey === 'HC CASE' ? '#dbeafe' : s.targetKey === 'LABOUR CASE' ? '#d1fae5' : '#f3e8ff',
+                              color: s.targetKey === 'HC CASE' ? '#1e40af' : s.targetKey === 'LABOUR CASE' ? '#065f46' : '#6b21a8'
+                            }}
+                            className="text-[11px] font-black px-2 py-0.5 rounded-lg"
+                          >
+                            {s.targetKey}
+                          </span>
+                          <span className="font-mono text-xs font-bold text-slate-500">
+                            {s.sheetName}
+                          </span>
+                        </div>
+                        <div className="text-lg font-black font-mono text-slate-900 mt-1">
+                          {s.rowCount} <span className="text-xs text-slate-500 font-bold">કેસો</span>
+                        </div>
                       </div>
-                      <div className="text-lg font-black font-mono text-slate-900 mt-1">
-                        {s.rowCount} <span className="text-xs text-slate-500 font-bold">કેસો</span>
+
+                      {/* Detected Heading & Columns info */}
+                      <div className="mt-2.5 pt-2 border-t border-slate-200 text-[11px] space-y-1">
+                        <div className="font-bold text-slate-800 line-clamp-2" title={s.title}>
+                          <span className="text-blue-700 font-black">હેડિંગ:</span> {s.title}
+                        </div>
+                        <div className="text-slate-500 font-medium truncate" title={s.headers.join(', ')}>
+                          <span className="text-slate-700 font-bold">સ્તંભો ({s.headers.length}):</span> {s.headers.slice(0, 3).join(', ')}...
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -364,10 +464,10 @@ export const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
                     <div>
                       <span className="text-xs font-black text-slate-900 block flex items-center gap-1">
                         <RefreshCw className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>સંપૂર્ણ ડેટા બદલો (Full Replace)</span>
+                        <span>સંપૂર્ણ ડેટા અને હેડિંગ બદલો (Full Replace)</span>
                       </span>
                       <span className="text-[11px] text-slate-600 font-medium block mt-0.5">
-                        હાલના કેસોની જગ્યાએ આ એક્સેલનો નવો ડેટા આવી જશે
+                        હાલના કેસો અને જૂના હેડિંગની જગ્યાએ આ એક્સેલનો નવો ડેટા તથા નવું હેડિંગ આવી જશે
                       </span>
                     </div>
                   </label>
@@ -389,10 +489,10 @@ export const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
                     <div>
                       <span className="text-xs font-black text-slate-900 block flex items-center gap-1">
                         <PlusCircle className="w-3.5 h-3.5 text-blue-600" />
-                        <span>નવા કેસો મર્જ કરો (Append/Merge)</span>
+                        <span>નવા કેસો ઉમેરો અને હેડિંગ અપડેટ કરો (Merge)</span>
                       </span>
                       <span className="text-[11px] text-slate-600 font-medium block mt-0.5">
-                        હાલના કેસો રહેશે અને એક્સેલના નવા કેસો ઉમેરાઈ જશે
+                        હાલના કેસો રહેશે, નવા કેસો ઉમેરાશે અને નવું હેડિંગ અપડેટ થશે
                       </span>
                     </div>
                   </label>
@@ -445,7 +545,6 @@ export const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
           >
             બંધ કરો
           </button>
-
           <button
             type="button"
             disabled={!rawWorkbookData || isProcessing}
@@ -459,7 +558,7 @@ export const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
             className="px-5 sm:px-6 py-2.5 text-xs sm:text-sm font-black rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition-all flex items-center gap-2 cursor-pointer disabled:cursor-not-allowed"
           >
             <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5]" />
-            <span>✓ એક્સેલ ડેટા અપડેટ કરો ({totalCasesDetected} કેસો)</span>
+            <span>✓ એક્સેલ ડેટા અને હેડિંગ અપડેટ કરો ({totalCasesDetected} કેસો)</span>
           </button>
         </div>
       </div>

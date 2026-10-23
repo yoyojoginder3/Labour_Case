@@ -321,11 +321,24 @@ export default function App() {
   };
 
   // Add New Case Handler (Protected: Only Admin can add)
-  const handleAddCase = (targetSheet: SheetKey, newRowData: string[]) => {
+  const handleAddCase = (targetSheet: SheetKey, newRowData: string[], profile?: EmployeeProfile) => {
     if (!isAdmin) {
       showToast('નવો કેસ ઉમેરવા માટે એડમિન તરીકે લોગીન કરો.', 'error');
       setIsLoginModalOpen(true);
       return;
+    }
+
+    const caseKey = getCaseKey(targetSheet, newRowData, 2);
+    if (profile) {
+      setEmployeeProfiles((prev) => {
+        const next = { ...prev, [caseKey]: profile };
+        try {
+          localStorage.setItem(STORAGE_PROFILES_KEY, JSON.stringify(next));
+        } catch (e) {
+          console.error(e);
+        }
+        return next;
+      });
     }
 
     setData((prev) => {
@@ -517,12 +530,25 @@ export default function App() {
   };
 
   // Save full row edit from modal
-  const handleSaveModalRow = (updatedRow: string[]) => {
+  const handleSaveModalRow = (updatedRow: string[], updatedProfile?: EmployeeProfile) => {
     if (!isAdmin) {
       showToast('સુધારો કરવા માટે એડમિન એક્સેસ જરૂરી છે.', 'error');
       return;
     }
     if (activeSheet === 'SUMMARY' || detailModalIndex === null) return;
+
+    const caseKey = getCaseKey(activeSheet, updatedRow, detailModalIndex);
+    if (updatedProfile) {
+      setEmployeeProfiles((prev) => {
+        const next = { ...prev, [caseKey]: updatedProfile };
+        try {
+          localStorage.setItem(STORAGE_PROFILES_KEY, JSON.stringify(next));
+        } catch (e) {
+          console.error(e);
+        }
+        return next;
+      });
+    }
 
     setData((prev) => {
       const sheet = [...(prev[activeSheet] || [])];
@@ -1215,6 +1241,7 @@ export default function App() {
                 headers={currentHeaders}
                 rows={currentSheetRows}
                 selectedRowIndex={selectedRowIndex}
+                employeeProfiles={employeeProfiles}
                 onSelectRow={setSelectedRowIndex}
                 onCellChange={handleCellChange}
                 onViewDetails={(idx) => setDetailModalIndex(idx)}
@@ -1227,6 +1254,7 @@ export default function App() {
                 sheetKey={activeSheet}
                 rows={currentSheetRows}
                 selectedRowIndex={selectedRowIndex}
+                employeeProfiles={employeeProfiles}
                 onSelectRow={setSelectedRowIndex}
                 onViewDetails={(idx) => setDetailModalIndex(idx)}
                 onDeleteRow={handleDeleteRow}
