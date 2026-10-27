@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import * as XLSX from 'xlsx';
-import { SheetKey, SheetDataMap, SheetMetaMap, CaseFilter, AuthUser, EmployeeProfile, EmployeeProfileMap } from './types/case';
+import { SheetKey, SheetDataMap, SheetMetaMap, CaseFilter, AuthUser, EmployeeProfile, EmployeeProfileMap, ActiveTab } from './types/case';
 import {
   SHEET_CONFIGS,
   RAW_INITIAL_DATA,
@@ -12,7 +12,8 @@ import {
   isInvalidAdvocateName,
   normalizeAdvocateName,
   getCaseKey,
-  extractInitialProfileFromRow
+  extractInitialProfileFromRow,
+  getPetitionerType
 } from './data/initialData';
 import { Header } from './components/Header';
 import { StatsCards } from './components/StatsCards';
@@ -28,7 +29,18 @@ import { ExcelUploadModal } from './components/ExcelUploadModal';
 import { NotificationModal } from './components/NotificationModal';
 import { LoginModal } from './components/LoginModal';
 import { LoginPage } from './components/LoginPage';
-import { Check, AlertCircle, Info, Plus, Download, Landmark, Scale, Gavel, Archive, ShieldCheck, Lock, Bell, MessageSquare, Smartphone, Pencil, FileSpreadsheet, UserCheck } from 'lucide-react';
+import { Check, AlertCircle, Info, Plus, Download, Landmark, Scale, Gavel, Archive, ShieldCheck, Lock, Bell, MessageSquare, Smartphone, Pencil, FileSpreadsheet, UserCheck, Layers } from 'lucide-react';
+
+const TOTAL_COLUMNS = [
+  'ક્રમ નં.',
+  'અદાલત / કોર્ટ પ્રકાર',
+  'કેસ / SCA / રેફ. નં.',
+  'HCE / ફાઈલ / સ્થળ',
+  'નિગમના પેનલ એડવોકેટનું નામ',
+  'કર્મચારીનું નામ હોદ્દો/બેજ નં',
+  'કેસની ટૂંકી વિગત',
+  'હાલની છેલ્લામાં છેલ્લી પરિસ્થિતી / સ્ટેટસ'
+];
 
 const STORAGE_KEY = 'gsrtc_court_cases_data_v3';
 const STORAGE_META_KEY = 'gsrtc_court_cases_meta_v3';
@@ -97,7 +109,7 @@ export default function App() {
     return INITIAL_METADATA;
   });
 
-  const [activeSheet, setActiveSheet] = useState<SheetKey | 'SUMMARY' | 'CALENDAR'>('HC CASE');
+  const [activeSheet, setActiveSheet] = useState<ActiveTab>('TOTAL');
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null);
 
@@ -106,6 +118,7 @@ export default function App() {
   const [isExcelUploadModalOpen, setIsExcelUploadModalOpen] = useState(false);
   const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
   const [detailModalIndex, setDetailModalIndex] = useState<number | null>(null);
+  const [detailModalSheetKey, setDetailModalSheetKey] = useState<SheetKey>('HC CASE');
 
   // Urgent upcoming hearings count
   const urgentHearingsList = useMemo(() => {
@@ -162,7 +175,8 @@ export default function App() {
     advocate: '',
     court: '',
     statusType: '',
-    disposedOnly: 'all'
+    disposedOnly: 'all',
+    petitionerType: 'all'
   });
 
   // Calculate statistics across all sheets
@@ -247,15 +261,96 @@ export default function App() {
   const currentSheetRows = useMemo(() => {
     if (activeSheet === 'SUMMARY' || activeSheet === 'DISPOSED ARCHIVE' || activeSheet === 'CALENDAR') return [];
 
+    const query = filter.searchQuery.toLowerCase().trim();
+    const result: Array<{ originalIndex: number; sheetKey: SheetKey; data: string[] }> = [];
+
+    if (activeSheet === 'TOTAL') {
+      const allCourtSheets: SheetKey[] = ['HC CASE', 'LABOUR CASE', 'IT CASE'];
+      let serial = 1;
+
+      allCourtSheets.forEach((sKey) => {
+        const rawRows = data[sKey] || [];
+        const isHC = sKey === 'HC CASE';
+        const advCol = isHC ? 4 : 3;
+        const courtCol = isHC ? undefined : 2;
+        const statusCol = isHC ? 10 : 6;
+        const empCol = isHC ? 5 : 4;
+        const courtLabel = isHC ? 'હાઈકોર્ટ' : sKey === 'LABOUR CASE' ? 'લેબર કોર્ટ' : 'ઔદ્યોગિક (IT)';
+
+        for (let i = 2; i < rawRows.length; i++) {
+          const row = rawRows[i];
+          if (!row || !isValidCaseRow(row) || isHeaderRow(row)) continue;
+
+          if (query) {
+            const text = (row.join(' ') + ' ' + courtLabel).toLowerCase();
+            if (!text.includes(query)) continue;
+          }
+
+          if (filter.advocate) {
+            const rawAdv = row[advCol] || '';
+            const cleanAdv = normalizeAdvocateName(rawAdv);
+            if (cleanAdv !== filter.advocate) continue;
+          }
+
+          if (filter.court) {
+            const court = (courtCol !== undefined ? (row[courtCol] || '') : 'અમદાવાદ').trim();
+            if (court !== filter.court) continue;
+          }
+
+          if (filter.statusType) {
+            const status = row[statusCol] || '';
+            const cat = getStatusCategory(status);
+            if (cat.type !== filter.statusType) continue;
+          }
+
+          if (filter.disposedOnly !== 'all') {
+            const status = row[statusCol] || '';
+            const cat = getStatusCategory(status);
+            if (filter.disposedOnly === 'disposed' && cat.type !== 'disposed') continue;
+            if (filter.disposedOnly === 'pending' && cat.type === 'disposed') continue;
+          }
+
+          if (filter.petitionerType && filter.petitionerType !== 'all') {
+            const partyText = row[empCol] || '';
+            const caseKey = getCaseKey(sKey, row, i);
+            const profile = employeeProfiles[caseKey];
+            const pType = getPetitionerType(partyText, profile);
+            if (pType !== filter.petitionerType) continue;
+          }
+
+          // Build unified 8-column row representation
+          const caseNo = isHC ? (row[3] || row[1] || '-') : (row[1] || '-');
+          const fileOrLoc = isHC ? (row[1] ? `HCE: ${row[1]}` : '-') : (row[2] || 'સુરત');
+          const adv = row[advCol] || '-';
+          const emp = row[empCol] || '-';
+          const summary = isHC ? (row[6] || '-') : (row[5] || '-');
+          const status = row[statusCol] || '-';
+
+          const unifiedRow = [
+            serial.toString(),
+            courtLabel,
+            caseNo,
+            fileOrLoc,
+            adv,
+            emp,
+            summary,
+            status
+          ];
+
+          result.push({ originalIndex: i, sheetKey: sKey, data: unifiedRow });
+          serial++;
+        }
+      });
+
+      return result;
+    }
+
+    // Individual sheet (HC CASE, LABOUR CASE, IT CASE)
     const rawRows = data[activeSheet] || [];
     const isHC = activeSheet === 'HC CASE';
     const advCol = isHC ? 4 : 3;
     const courtCol = isHC ? undefined : 2;
     const statusCol = isHC ? 10 : 6;
-
-    const query = filter.searchQuery.toLowerCase().trim();
-
-    const result: Array<{ originalIndex: number; data: string[] }> = [];
 
     for (let i = 2; i < rawRows.length; i++) {
       const row = rawRows[i];
@@ -290,22 +385,33 @@ export default function App() {
         if (filter.disposedOnly === 'pending' && cat.type === 'disposed') continue;
       }
 
-      result.push({ originalIndex: i, data: row });
+      if (filter.petitionerType && filter.petitionerType !== 'all') {
+        const empCol = isHC ? 5 : 4;
+        const partyText = row[empCol] || '';
+        const caseKey = getCaseKey(activeSheet, row, i);
+        const profile = employeeProfiles[caseKey];
+        const pType = getPetitionerType(partyText, profile);
+        if (pType !== filter.petitionerType) continue;
+      }
+
+      result.push({ originalIndex: i, sheetKey: activeSheet, data: row });
     }
 
     return result;
-  }, [data, activeSheet, filter]);
+  }, [data, activeSheet, filter, employeeProfiles]);
 
   // Cell Change Handler (Only permitted for Admin)
-  const handleCellChange = (originalIndex: number, colIndex: number, newValue: string) => {
+  const handleCellChange = (originalIndex: number, colIndex: number, newValue: string, rowSheetKey?: SheetKey) => {
     if (!isAdmin) {
       showToast('સેલમાં ફેરફાર કરવા માટે એડમિન એક્સેસ જરૂરી છે.', 'error');
       return;
     }
-    if (activeSheet === 'SUMMARY' || activeSheet === 'DISPOSED ARCHIVE') return;
+    const sheetName = (rowSheetKey || activeSheet) as string;
+    if (sheetName === 'SUMMARY' || sheetName === 'DISPOSED ARCHIVE' || sheetName === 'TOTAL' || sheetName === 'CALENDAR') return;
+    const targetSheet = sheetName as SheetKey;
 
     setData((prev) => {
-      const sheet = prev[activeSheet];
+      const sheet = prev[targetSheet];
       if (!sheet || !sheet[originalIndex]) return prev;
 
       const newSheet = [...sheet];
@@ -315,7 +421,7 @@ export default function App() {
 
       return {
         ...prev,
-        [activeSheet]: newSheet
+        [targetSheet]: newSheet
       };
     });
   };
@@ -366,18 +472,20 @@ export default function App() {
   };
 
   // Delete Case Handler (Protected: Only Admin can delete)
-  const handleDeleteRow = (originalIndex: number) => {
+  const handleDeleteRow = (originalIndex: number, rowSheetKey?: SheetKey) => {
     if (!isAdmin) {
       showToast('કેસ ડિલીટ કરવા માટે એડમિન એક્સેસ જરૂરી છે.', 'error');
       setIsLoginModalOpen(true);
       return;
     }
-    if (activeSheet === 'SUMMARY' || activeSheet === 'DISPOSED ARCHIVE') return;
+    const sheetName = (rowSheetKey || activeSheet) as string;
+    if (sheetName === 'SUMMARY' || sheetName === 'DISPOSED ARCHIVE' || sheetName === 'TOTAL' || sheetName === 'CALENDAR') return;
+    const targetSheet = sheetName as SheetKey;
 
     if (!confirm('શું તમે આ કેસ રેકોર્ડ ખરેખર કાઢી નાખવા માંગો છો?')) return;
 
     setData((prev) => {
-      const sheet = [...(prev[activeSheet] || [])];
+      const sheet = [...(prev[targetSheet] || [])];
       sheet.splice(originalIndex, 1);
 
       for (let i = 2; i < sheet.length; i++) {
@@ -386,7 +494,7 @@ export default function App() {
 
       return {
         ...prev,
-        [activeSheet]: sheet
+        [targetSheet]: sheet
       };
     });
 
@@ -396,15 +504,16 @@ export default function App() {
 
   // MOVE TO DISPOSED ARCHIVE HANDLER:
   // "case nikal thaya pachi agal excel bane and orignal excel mathi delet kari skay"
-  const handleMoveToDisposedArchive = (originalIndex: number) => {
+  const handleMoveToDisposedArchive = (originalIndex: number, rowSheetKey?: SheetKey) => {
     if (!isAdmin) {
       showToast('આર્કાઇવમાં ખસેડવા માટે એડમિન એક્સેસ જરૂરી છે.', 'error');
       setIsLoginModalOpen(true);
       return;
     }
-    if (activeSheet === 'SUMMARY' || activeSheet === 'DISPOSED ARCHIVE') return;
+    const sheetName = (rowSheetKey || activeSheet) as string;
+    if (sheetName === 'SUMMARY' || sheetName === 'DISPOSED ARCHIVE' || sheetName === 'TOTAL' || sheetName === 'CALENDAR') return;
+    const sourceSheet = sheetName as SheetKey;
 
-    const sourceSheet = activeSheet;
     const rowToArchive = data[sourceSheet]?.[originalIndex];
     if (!rowToArchive) return;
 
@@ -535,9 +644,10 @@ export default function App() {
       showToast('સુધારો કરવા માટે એડમિન એક્સેસ જરૂરી છે.', 'error');
       return;
     }
-    if (activeSheet === 'SUMMARY' || detailModalIndex === null) return;
+    if (detailModalIndex === null) return;
+    const targetSheet = detailModalSheetKey;
 
-    const caseKey = getCaseKey(activeSheet, updatedRow, detailModalIndex);
+    const caseKey = getCaseKey(targetSheet, updatedRow, detailModalIndex);
     if (updatedProfile) {
       setEmployeeProfiles((prev) => {
         const next = { ...prev, [caseKey]: updatedProfile };
@@ -551,15 +661,15 @@ export default function App() {
     }
 
     setData((prev) => {
-      const sheet = [...(prev[activeSheet] || [])];
+      const sheet = [...(prev[targetSheet] || [])];
       sheet[detailModalIndex] = updatedRow;
       return {
         ...prev,
-        [activeSheet]: sheet
+        [targetSheet]: sheet
       };
     });
 
-    showToast('કેસની વિગત સફળતાપૂર્વક અપડેટ થઈ.', 'success');
+    showToast('✏️ કેસ અને કર્મચારી વિગતો સફળતાપૂર્વક અપડેટ થઈ ગઈ!', 'success');
   };
 
   // Reset to default data
@@ -869,11 +979,14 @@ export default function App() {
     window.print();
   };
 
-  const isSheetConfigKey = activeSheet !== 'SUMMARY' && activeSheet !== 'CALENDAR';
+  const isSheetConfigKey = activeSheet !== 'SUMMARY' && activeSheet !== 'CALENDAR' && activeSheet !== 'TOTAL';
   const sheetRows = (isSheetConfigKey && data[activeSheet as SheetKey]) || [];
 
   // Dynamic Title: read from row 0 if available, else fallback to default
   const currentSheetTitle = useMemo(() => {
+    if (activeSheet === 'TOTAL') {
+      return 'કુલ તમામ પેન્ડિંગ કેસોની સંયુક્ત યાદી (હાઈકોર્ટ + લેબર કોર્ટ + ઔદ્યોગિક ટ્રિબ્યુનલ)';
+    }
     if (sheetRows.length > 0 && sheetRows[0]?.[0]?.trim()) {
       return sheetRows[0][0].trim();
     }
@@ -882,6 +995,9 @@ export default function App() {
 
   // Dynamic Column Headers: read from row 1 if available, else fallback to default
   const currentHeaders = useMemo(() => {
+    if (activeSheet === 'TOTAL') {
+      return TOTAL_COLUMNS;
+    }
     if (sheetRows.length > 1 && sheetRows[1]) {
       const rowHeaders = sheetRows[1].map((h) => String(h ?? '').trim());
       let lastNonEmpty = -1;
@@ -928,6 +1044,7 @@ export default function App() {
       <LoginPage
         onLogin={(user) => {
           setCurrentUser(user);
+          setActiveSheet('TOTAL');
           showToast(`સ્વાગત છે! ${user.name} તરીકે સફળતાપૂર્વક લોગીન થયા.`, 'success');
         }}
         stats={{
@@ -1078,20 +1195,20 @@ export default function App() {
             {/* Sheet Title Bar */}
             <div 
               style={{
-                backgroundColor: activeSheet === 'HC CASE' ? '#eff6ff' : activeSheet === 'LABOUR CASE' ? '#ecfdf5' : '#faf5ff',
-                borderColor: activeSheet === 'HC CASE' ? '#93c5fd' : activeSheet === 'LABOUR CASE' ? '#6ee7b7' : '#c084fc'
+                backgroundColor: activeSheet === 'TOTAL' ? '#f0fdfa' : activeSheet === 'HC CASE' ? '#eff6ff' : activeSheet === 'LABOUR CASE' ? '#ecfdf5' : '#faf5ff',
+                borderColor: activeSheet === 'TOTAL' ? '#5eead4' : activeSheet === 'HC CASE' ? '#93c5fd' : activeSheet === 'LABOUR CASE' ? '#6ee7b7' : '#c084fc'
               }}
               className="rounded-2xl border-2 px-5 py-3.5 mb-4 shadow-sm flex flex-wrap items-center justify-between gap-3"
             >
               <div className="flex items-center gap-3">
                 <div 
                   style={{
-                    backgroundColor: activeSheet === 'HC CASE' ? '#1d4ed8' : activeSheet === 'LABOUR CASE' ? '#059669' : '#7c3aed',
+                    backgroundColor: activeSheet === 'TOTAL' ? '#0d9488' : activeSheet === 'HC CASE' ? '#1d4ed8' : activeSheet === 'LABOUR CASE' ? '#059669' : '#7c3aed',
                     color: '#ffffff'
                   }}
                   className="w-10 h-10 rounded-xl flex items-center justify-center font-black shadow-xs"
                 >
-                  {activeSheet === 'HC CASE' ? <Landmark className="w-5 h-5" /> : activeSheet === 'LABOUR CASE' ? <Scale className="w-5 h-5" /> : <Gavel className="w-5 h-5" />}
+                  {activeSheet === 'TOTAL' ? <Layers className="w-5 h-5" /> : activeSheet === 'HC CASE' ? <Landmark className="w-5 h-5" /> : activeSheet === 'LABOUR CASE' ? <Scale className="w-5 h-5" /> : <Gavel className="w-5 h-5" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   {isEditingTitle && isAdmin ? (
@@ -1142,13 +1259,25 @@ export default function App() {
                     </div>
                   )}
                   <p className="text-xs font-bold text-slate-600 mt-0.5">
-                    {activeSheet} • પેન્ડિંગ કેસો: <strong className="text-blue-900 font-mono text-sm">{data[activeSheet]?.length ? data[activeSheet].length - 2 : 0}</strong>
+                    {activeSheet === 'TOTAL' ? 'તમામ અદાલતો (હાઈકોર્ટ, લેબર, IT)' : activeSheet} • પેન્ડિંગ કેસો: <strong className="text-blue-900 font-mono text-sm">{activeSheet === 'TOTAL' ? stats.total : (data[activeSheet]?.length ? data[activeSheet].length - 2 : 0)}</strong>
                   </p>
                 </div>
               </div>
 
               {/* Quick Tab Switcher Pills */}
-              <div className="flex items-center gap-2 text-xs font-black">
+              <div className="flex items-center gap-2 text-xs font-black flex-wrap">
+                <button
+                  onClick={() => setActiveSheet('TOTAL')}
+                  style={{
+                    backgroundColor: activeSheet === 'TOTAL' ? '#0d9488' : '#ffffff',
+                    color: activeSheet === 'TOTAL' ? '#ffffff' : '#115e59',
+                    border: '2px solid #0d9488'
+                  }}
+                  className="px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>કુલ તમામ ({stats.total})</span>
+                </button>
                 <button
                   onClick={() => setActiveSheet('HC CASE')}
                   style={{
@@ -1156,7 +1285,7 @@ export default function App() {
                     color: activeSheet === 'HC CASE' ? '#ffffff' : '#1e3a8a',
                     border: '2px solid #1d4ed8'
                   }}
-                  className="px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5"
+                  className="px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
                 >
                   <Landmark className="w-3.5 h-3.5" />
                   <span>હાઈકોર્ટ ({stats.hcCount})</span>
@@ -1168,7 +1297,7 @@ export default function App() {
                     color: activeSheet === 'LABOUR CASE' ? '#ffffff' : '#065f46',
                     border: '2px solid #059669'
                   }}
-                  className="px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5"
+                  className="px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
                 >
                   <Scale className="w-3.5 h-3.5" />
                   <span>લેબર ({stats.labourCount})</span>
@@ -1180,7 +1309,7 @@ export default function App() {
                     color: activeSheet === 'IT CASE' ? '#ffffff' : '#581c87',
                     border: '2px solid #7c3aed'
                   }}
-                  className="px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5"
+                  className="px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
                 >
                   <Gavel className="w-3.5 h-3.5" />
                   <span>ઔદ્યોગિક ({stats.itCount})</span>
@@ -1192,7 +1321,7 @@ export default function App() {
                     color: '#c2410c',
                     border: '2px solid #ea580c'
                   }}
-                  className="px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 hover:bg-orange-100"
+                  className="px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 hover:bg-orange-100 cursor-pointer"
                 >
                   <span>📅 મુદત કેલેન્ડર</span>
                 </button>
@@ -1203,7 +1332,7 @@ export default function App() {
                     color: '#92400e',
                     border: '2px solid #f59e0b'
                   }}
-                  className="px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 hover:bg-amber-100"
+                  className="px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 hover:bg-amber-100 cursor-pointer"
                 >
                   <span>👤 એડવોકેટ</span>
                 </button>
@@ -1214,7 +1343,7 @@ export default function App() {
                     color: '#0f766e',
                     border: '2px solid #0d9488'
                   }}
-                  className="px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 hover:bg-teal-100"
+                  className="px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 hover:bg-teal-100 cursor-pointer"
                 >
                   <span>📁 નિકાલ ({stats.disposedCount})</span>
                 </button>
@@ -1230,7 +1359,7 @@ export default function App() {
               viewMode={viewMode}
               onViewModeChange={setViewMode}
               filteredCount={currentSheetRows.length}
-              totalInCurrentSheet={data[activeSheet]?.length ? data[activeSheet].length - 2 : 0}
+              totalInCurrentSheet={activeSheet === 'TOTAL' ? stats.total : (data[activeSheet]?.length ? data[activeSheet].length - 2 : 0)}
               onExportDossier={() => handleExportExcel('dossier')}
             />
 
@@ -1243,10 +1372,19 @@ export default function App() {
                 selectedRowIndex={selectedRowIndex}
                 employeeProfiles={employeeProfiles}
                 onSelectRow={setSelectedRowIndex}
-                onCellChange={handleCellChange}
-                onViewDetails={(idx) => setDetailModalIndex(idx)}
-                onDeleteRow={handleDeleteRow}
-                onMoveToArchive={handleMoveToDisposedArchive}
+                onCellChange={(rowIndex, colIndex, val, rowSheetKey) => {
+                  handleCellChange(rowIndex, colIndex, val, rowSheetKey);
+                }}
+                onViewDetails={(idx, rowSheetKey) => {
+                  setDetailModalSheetKey(rowSheetKey || (activeSheet === 'TOTAL' ? 'HC CASE' : activeSheet as SheetKey));
+                  setDetailModalIndex(idx);
+                }}
+                onDeleteRow={(idx, rowSheetKey) => {
+                  handleDeleteRow(idx, rowSheetKey);
+                }}
+                onMoveToArchive={(idx, rowSheetKey) => {
+                  handleMoveToDisposedArchive(idx, rowSheetKey);
+                }}
                 isAdmin={isAdmin}
               />
             ) : (
@@ -1256,8 +1394,13 @@ export default function App() {
                 selectedRowIndex={selectedRowIndex}
                 employeeProfiles={employeeProfiles}
                 onSelectRow={setSelectedRowIndex}
-                onViewDetails={(idx) => setDetailModalIndex(idx)}
-                onDeleteRow={handleDeleteRow}
+                onViewDetails={(idx, rowSheetKey) => {
+                  setDetailModalSheetKey(rowSheetKey || (activeSheet === 'TOTAL' ? 'HC CASE' : activeSheet as SheetKey));
+                  setDetailModalIndex(idx);
+                }}
+                onDeleteRow={(idx, rowSheetKey) => {
+                  handleDeleteRow(idx, rowSheetKey);
+                }}
               />
             )}
           </div>
@@ -1295,19 +1438,19 @@ export default function App() {
       )}
 
       {/* Case Detail Modal */}
-      {detailModalIndex !== null && isSheetConfigKey && data[activeSheet]?.[detailModalIndex] && (
+      {detailModalIndex !== null && data[detailModalSheetKey]?.[detailModalIndex] && (
         <CaseDetailModal
           isOpen={detailModalIndex !== null}
-          sheetKey={activeSheet as SheetKey}
-          headers={currentHeaders}
-          rowData={data[activeSheet][detailModalIndex]}
+          sheetKey={detailModalSheetKey}
+          headers={SHEET_CONFIGS[detailModalSheetKey]?.headers || []}
+          rowData={data[detailModalSheetKey][detailModalIndex]}
           rowIndex={detailModalIndex}
-          employeeProfile={employeeProfiles[getCaseKey(activeSheet, data[activeSheet][detailModalIndex], detailModalIndex)] || extractInitialProfileFromRow(activeSheet, data[activeSheet][detailModalIndex])}
+          employeeProfile={employeeProfiles[getCaseKey(detailModalSheetKey, data[detailModalSheetKey][detailModalIndex], detailModalIndex)] || extractInitialProfileFromRow(detailModalSheetKey, data[detailModalSheetKey][detailModalIndex])}
           isAdmin={isAdmin}
           onClose={() => setDetailModalIndex(null)}
           onSaveRow={handleSaveModalRow}
           onDeleteRow={() => {
-            handleDeleteRow(detailModalIndex);
+            handleDeleteRow(detailModalIndex, detailModalSheetKey);
             setDetailModalIndex(null);
           }}
         />

@@ -44,6 +44,7 @@ export const AddCaseModal: React.FC<AddCaseModalProps> = ({
   );
 
   // Court Case Details
+  const [petitionerType, setPetitionerType] = useState<'employee' | 'st'>('employee');
   const [caseNo, setCaseNo] = useState('');
   const [fileNo, setFileNo] = useState('');
   const [advocate, setAdvocate] = useState('');
@@ -68,6 +69,7 @@ export const AddCaseModal: React.FC<AddCaseModalProps> = ({
   React.useEffect(() => {
     if (isOpen) {
       setTargetSheet(currentSheetKey === 'DISPOSED ARCHIVE' ? 'HC CASE' : currentSheetKey);
+      setPetitionerType('employee');
       setCaseNo('');
       setFileNo('');
       setAdvocate(advocateList[0] || '');
@@ -170,16 +172,25 @@ export const AddCaseModal: React.FC<AddCaseModalProps> = ({
     const punishment = empProfile.punishmentOrder.trim();
     const caseSummary = punishment ? `${offense} (${punishment})` : offense;
 
+    const profileWithPetitioner: EmployeeProfile = {
+      ...empProfile,
+      petitionerType
+    };
+
     let newRow: string[] = [];
 
     if (targetSheet === 'HC CASE') {
+      const partyStr = petitionerType === 'st'
+        ? `અરજદારઃ- એસ.ટી.સંસ્થા / નિગમ સામાવાળાઃ- ${empName} (${des})${infoLine ? `\n[${infoLine}]` : ''}`
+        : `અરજદારઃ- ${empName} (${des})${infoLine ? `\n[${infoLine}]` : ''} સામાવાળાઃ- એસ.ટી.સંસ્થા`;
+
       newRow = [
         '1',                                                                   // 0: ક્રમ નં.
         fileNo || '-',                                                         // 1: HCE ફાઈલ No.
         lowerCourtOrder || '-',                                                // 2: નીચલી કોર્ટના ચુકાદા
         caseNo || 'SCA-',                                                      // 3: SCA/LPA No.
         advocate || 'પેનલ એડવોકેટ',                                            // 4: નિગમના પેનલ એડવોકેટનું નામ
-        `અરજદારઃ- ${empName} (${des})${infoLine ? `\n[${infoLine}]` : ''} સામાવાળાઃ- એસ.ટી.સંસ્થા`, // 5: કામદાર/અરજદારનું નામ
+        partyStr,                                                              // 5: કામદાર/અરજદારનું નામ
         caseSummary,                                                           // 6: કેસની ટૂંકી વિગત
         '-',                                                                   // 7: પેપર્સ સુપ્રત તારીખ
         '-',                                                                   // 8: વચગાળાના ચુકાદા
@@ -188,12 +199,13 @@ export const AddCaseModal: React.FC<AddCaseModalProps> = ({
       ];
     } else {
       // LABOUR CASE or IT CASE
+      const partyPrefix = petitionerType === 'st' ? 'એસ.ટી. નિગમ સામાવાળા ' : '';
       newRow = [
         '1',                                                                   // 0: ક્રમ નં.
         caseNo || 'રેફ.નં.-',                                                  // 1: રેફ. નંબર
         courtLocation || 'સુરત',                                               // 2: લેબરકોર્ટ
         advocate || 'પેનલ એડવોકેટ',                                            // 3: નિગમના પેનલ એડવોકેટનું નામ
-        `${empName}\n${des}${infoLine ? `\n${infoLine}` : ''}`,                 // 4: કર્મચારીનું નામ હોદ્દો/બેજ નં
+        `${partyPrefix}${empName}\n${des}${infoLine ? `\n${infoLine}` : ''}`,   // 4: કર્મચારીનું નામ હોદ્દો/બેજ નં
         caseSummary,                                                           // 5: કેસની ટૂંકી વિગત
         statusVal || 'For Argument of First Party\nDate- 20/10/2026'           // 6: હાલની પરિસ્થિતી
       ];
@@ -204,7 +216,7 @@ export const AddCaseModal: React.FC<AddCaseModalProps> = ({
       newRow.push('');
     }
 
-    onSubmit(targetSheet, newRow, empProfile);
+    onSubmit(targetSheet, newRow, profileWithPetitioner);
     onClose();
   };
 
@@ -557,6 +569,52 @@ export const AddCaseModal: React.FC<AddCaseModalProps> = ({
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {/* Petitioner Selector: Who filed the case? */}
+                <div style={{ backgroundColor: '#ffffff', border: '2px solid #38bdf8' }} className="p-3.5 rounded-2xl md:col-span-2 shadow-2xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-black text-sky-950 flex items-center gap-1.5">
+                      <Scale className="w-4 h-4 text-sky-600" />
+                      <span>કેસ કોણે દાખલ કરેલ છે? (પક્ષકારો / અરજદાર નક્કી કરો)</span>
+                      <span className="text-rose-600">*</span>
+                    </label>
+                    <span className="text-[11px] font-bold text-sky-700">પક્ષકાર પદ્ધતિ</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setPetitionerType('employee')}
+                      style={{
+                        backgroundColor: petitionerType === 'employee' ? '#eff6ff' : '#f8fafc',
+                        borderColor: petitionerType === 'employee' ? '#2563eb' : '#cbd5e1',
+                        color: petitionerType === 'employee' ? '#1e3a8a' : '#475569'
+                      }}
+                      className="p-3 rounded-xl border-2 text-left font-bold text-xs flex items-center gap-2.5 transition-all cursor-pointer"
+                    >
+                      <span className="text-xl">🧑‍💼</span>
+                      <div>
+                        <div className="font-black text-slate-900">૧. કર્મચારી દ્વારા દાખલ</div>
+                        <div className="text-[11px] text-slate-500">અરજદાર: કર્મચારી | સામાવાળા: એસ.ટી. નિગમ</div>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPetitionerType('st')}
+                      style={{
+                        backgroundColor: petitionerType === 'st' ? '#f0fdf4' : '#f8fafc',
+                        borderColor: petitionerType === 'st' ? '#16a34a' : '#cbd5e1',
+                        color: petitionerType === 'st' ? '#14532d' : '#475569'
+                      }}
+                      className="p-3 rounded-xl border-2 text-left font-bold text-xs flex items-center gap-2.5 transition-all cursor-pointer"
+                    >
+                      <span className="text-xl">🚌</span>
+                      <div>
+                        <div className="font-black text-slate-900">૨. એસ.ટી. નિગમ દ્વારા દાખલ</div>
+                        <div className="text-[11px] text-slate-500">અરજદાર: એસ.ટી. નિગમ | સામાવાળા: કર્મચારી</div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
                 {/* Case / SCA / Ref No */}
                 <div style={{ backgroundColor: '#ffffff', border: '2px solid #bae6fd' }} className="p-3 rounded-2xl space-y-1 shadow-2xs">
                   <label className="block text-xs font-black text-sky-950 flex items-center gap-1.5">

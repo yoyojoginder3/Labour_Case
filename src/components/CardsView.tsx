@@ -4,13 +4,13 @@ import { getStatusCategory, extractDateFromStatus, getCaseKey } from '../data/in
 import { Calendar, User, Eye, Trash2, Copy, Check, FileText, ArrowRight, Briefcase, Award } from 'lucide-react';
 
 interface CardsViewProps {
-  sheetKey: SheetKey;
-  rows: Array<{ originalIndex: number; data: string[] }>;
+  sheetKey: SheetKey | 'TOTAL';
+  rows: Array<{ originalIndex: number; sheetKey?: SheetKey; data: string[] }>;
   selectedRowIndex: number | null;
   employeeProfiles?: EmployeeProfileMap;
   onSelectRow: (originalIndex: number) => void;
-  onViewDetails: (originalIndex: number) => void;
-  onDeleteRow: (originalIndex: number) => void;
+  onViewDetails: (originalIndex: number, rowSheetKey?: SheetKey) => void;
+  onDeleteRow: (originalIndex: number, rowSheetKey?: SheetKey) => void;
 }
 
 const ADVOCATE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
@@ -54,7 +54,9 @@ export const CardsView: React.FC<CardsViewProps> = ({
 
   // Top color border per sheet
   const topBorderClass =
-    sheetKey === 'HC CASE'
+    sheetKey === 'TOTAL'
+      ? 'from-blue-600 via-emerald-600 to-purple-600'
+      : sheetKey === 'HC CASE'
       ? 'from-blue-600 to-indigo-600'
       : sheetKey === 'LABOUR CASE'
       ? 'from-emerald-600 to-teal-600'
@@ -62,7 +64,7 @@ export const CardsView: React.FC<CardsViewProps> = ({
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {rows.map(({ originalIndex, data: rowData }) => {
+      {rows.map(({ originalIndex, sheetKey: rowSheet, data: rowData }) => {
         const isSelected = selectedRowIndex === originalIndex;
 
         // Extract normalized fields based on sheet
@@ -74,7 +76,15 @@ export const CardsView: React.FC<CardsViewProps> = ({
         let status = '';
         let courtName = '';
 
-        if (sheetKey === 'HC CASE') {
+        if (sheetKey === 'TOTAL') {
+          courtName = rowData[1] || '';
+          caseNo = rowData[2] || '';
+          fileNo = rowData[3] || '';
+          advocate = (rowData[4] || '').trim();
+          applicant = rowData[5] || '';
+          summary = rowData[6] || '';
+          status = rowData[7] || '';
+        } else if (sheetKey === 'HC CASE') {
           fileNo = rowData[1] || '';
           caseNo = rowData[3] || '';
           advocate = (rowData[4] || '').trim();
@@ -264,7 +274,7 @@ export const CardsView: React.FC<CardsViewProps> = ({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    onViewDetails(originalIndex);
+                    onViewDetails(originalIndex, rowSheet);
                   }}
                   title="સંપૂર્ણ કેસ ડોકેટ જુઓ"
                   className="inline-flex items-center gap-1 px-3 py-1 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-all shadow-2xs"
@@ -276,7 +286,7 @@ export const CardsView: React.FC<CardsViewProps> = ({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    onDeleteRow(originalIndex);
+                    onDeleteRow(originalIndex, rowSheet);
                   }}
                   title="કેસ ડિલીટ કરો"
                   className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"

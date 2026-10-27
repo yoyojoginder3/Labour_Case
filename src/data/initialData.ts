@@ -318,6 +318,17 @@ export function getCaseKey(sheetKey: string, row: string[], index?: number): str
   return `${sheetKey}__${caseNo || fileNo || `row_${index ?? 0}`}__${emp}`.replace(/[\s\n\/\\]+/g, '_');
 }
 
+/** Determine whether the case was filed by the Employee or by GSRTC (ST) */
+export function getPetitionerType(partyText: string, profile?: EmployeeProfile): 'employee' | 'st' {
+  if (profile?.petitionerType) return profile.petitionerType;
+  if (!partyText) return 'employee';
+  // Check if ST/GSRTC is listed as the Applicant / Petitioner
+  if (/અરજદાર[:ઃ-]?\s*(એસ\.?ટી|નિગમ|GSRTC|સંસ્થા|ગુજરાત)/i.test(partyText)) {
+    return 'st';
+  }
+  return 'employee';
+}
+
 /** Extract or pre-populate initial employee profile from case row */
 export function extractInitialProfileFromRow(sheetKey: string, row: string[]): EmployeeProfile {
   let empText = '';
@@ -330,19 +341,46 @@ export function extractInitialProfileFromRow(sheetKey: string, row: string[]): E
     summary = row[5] || '';
   }
 
-  let employeeName = empText;
+  const isSTPetitioner = getPetitionerType(empText) === 'st';
+  let employeeName = '';
   let designation = '';
-  if (empText.includes('અરજદારઃ-')) {
-    const after = empText.split('અરજદારઃ-')[1] || '';
-    const beforeOpp = after.split('સામાવાળા')[0] || '';
-    employeeName = beforeOpp.trim();
+
+  if (isSTPetitioner) {
+    // When ST/GSRTC is Applicant, Employee is Respondent (સામાવાળા)
+    const afterOpp = empText.split(/સામાવાળા[:ઃ-]?/)[1] || '';
+    const cleanOpp = afterOpp.split('[')[0].trim();
+    if (cleanOpp.includes('(')) {
+      employeeName = cleanOpp.split('(')[0].trim();
+      designation = cleanOpp.split('(')[1]?.split(')')[0]?.trim() || '';
+    } else {
+      employeeName = cleanOpp;
+    }
+  } else if (empText.includes('અરજદારઃ-') || empText.includes('અરજદાર:')) {
+    // When Employee is Applicant (અરજદાર)
+    const after = empText.split(/અરજદાર[:ઃ-]?/)[1] || '';
+    const beforeOpp = after.split(/સામાવાળા[:ઃ-]?/)[0] || '';
+    const cleanApp = beforeOpp.split('[')[0].trim();
+    if (cleanApp.includes('(')) {
+      employeeName = cleanApp.split('(')[0].trim();
+      designation = cleanApp.split('(')[1]?.split(')')[0]?.trim() || '';
+    } else {
+      employeeName = cleanApp;
+    }
+  } else {
+    employeeName = empText.split('\n')[0].replace(/સામાવાળા.*/, '').trim();
+    if (empText.includes('\n')) {
+      designation = empText.split('\n')[1].replace(/\[.*\]/, '').replace(/PF:.*/, '').trim();
+    }
   }
-  if (empText.includes('કંડ') || empText.includes('કંડકટર')) {
-    designation = 'કંડકટર';
-  } else if (empText.includes('ડ્રાય') || empText.includes('ડ્રાયવર')) {
-    designation = 'ડ્રાયવર';
-  } else if (empText.includes('કલાર્ક')) {
-    designation = 'જુ.કલાર્ક';
+
+  if (!designation) {
+    if (empText.includes('કંડ') || empText.includes('કંડકટર')) {
+      designation = 'કંડકટર';
+    } else if (empText.includes('ડ્રાય') || empText.includes('ડ્રાયવર')) {
+      designation = 'ડ્રાયવર';
+    } else if (empText.includes('કલાર્ક')) {
+      designation = 'જુ.કલાર્ક';
+    }
   }
 
   let punishmentOrder = '';
@@ -360,6 +398,7 @@ export function extractInitialProfileFromRow(sheetKey: string, row: string[]): E
     offenseDetails: summary,
     punishmentOrder,
     firstAppeal: '',
-    secondAppeal: ''
+    secondAppeal: '',
+    petitionerType: isSTPetitioner ? 'st' : 'employee'
   };
 }

@@ -353,6 +353,58 @@ PF નં.: ${profileData.pfNo || '-'}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {/* Petitioner Type Indicator */}
+                <div style={{ backgroundColor: '#ffffff', border: '2px solid #38bdf8' }} className="p-3.5 rounded-2xl md:col-span-2 shadow-2xs space-y-2">
+                  <label className="block text-xs font-black text-sky-950 flex items-center gap-1.5">
+                    <Scale className="w-4 h-4 text-sky-600" />
+                    <span>કેસ કોણે દાખલ કરેલ છે? (પક્ષકારો / અરજદાર પ્રકાર)</span>
+                  </label>
+                  {isEditing ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => handleProfileFieldChange('petitionerType', 'employee')}
+                        style={{
+                          backgroundColor: (profileData.petitionerType || 'employee') === 'employee' ? '#eff6ff' : '#f8fafc',
+                          borderColor: (profileData.petitionerType || 'employee') === 'employee' ? '#2563eb' : '#cbd5e1',
+                          color: (profileData.petitionerType || 'employee') === 'employee' ? '#1e3a8a' : '#475569'
+                        }}
+                        className="p-2.5 rounded-xl border-2 text-left font-bold text-xs flex items-center gap-2 cursor-pointer"
+                      >
+                        <span className="text-base">🧑‍💼</span>
+                        <span>૧. કર્મચારી દ્વારા દાખલ (અરજદાર: કર્મચારી)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleProfileFieldChange('petitionerType', 'st')}
+                        style={{
+                          backgroundColor: profileData.petitionerType === 'st' ? '#f0fdf4' : '#f8fafc',
+                          borderColor: profileData.petitionerType === 'st' ? '#16a34a' : '#cbd5e1',
+                          color: profileData.petitionerType === 'st' ? '#14532d' : '#475569'
+                        }}
+                        className="p-2.5 rounded-xl border-2 text-left font-bold text-xs flex items-center gap-2 cursor-pointer"
+                      >
+                        <span className="text-base">🚌</span>
+                        <span>૨. એસ.ટી. નિગમ દ્વારા દાખલ (અરજદાર: એસ.ટી.)</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span
+                        style={{
+                          backgroundColor: profileData.petitionerType === 'st' ? '#dcfce7' : '#dbeafe',
+                          color: profileData.petitionerType === 'st' ? '#166534' : '#1e40af',
+                          border: `1.5px solid ${profileData.petitionerType === 'st' ? '#86efac' : '#93c5fd'}`
+                        }}
+                        className="px-3 py-1 rounded-xl text-xs font-black inline-flex items-center gap-1.5"
+                      >
+                        <span>{profileData.petitionerType === 'st' ? '🚌' : '🧑‍💼'}</span>
+                        <span>{profileData.petitionerType === 'st' ? 'એસ.ટી. નિગમ દ્વારા દાખલ (અરજદાર: એસ.ટી. નિગમ / સંસ્થા)' : 'કર્મચારી દ્વારા દાખલ (અરજદાર: કર્મચારી)'}</span>
+                      </span>
+                    </div>
+                  )}
+                </div>
+
                 {/* 1. Employee Name */}
                 <div style={{ backgroundColor: '#f0fdf4', border: '2px solid #86efac' }} className="p-3.5 rounded-2xl space-y-1">
                   <label className="block text-xs font-black text-emerald-950 flex items-center gap-1.5">

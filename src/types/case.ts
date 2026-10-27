@@ -1,4 +1,5 @@
 export type SheetKey = 'HC CASE' | 'LABOUR CASE' | 'IT CASE' | 'DISPOSED ARCHIVE';
+export type ActiveTab = SheetKey | 'TOTAL' | 'SUMMARY' | 'CALENDAR';
 
 export interface SheetConfig {
   key: SheetKey;
@@ -16,6 +17,7 @@ export interface CaseFilter {
   court: string;
   statusType: string;
   disposedOnly: 'all' | 'pending' | 'disposed';
+  petitionerType?: 'all' | 'employee' | 'st';
 }
 
 export interface SheetDataMap {
@@ -69,6 +71,7 @@ export interface EmployeeProfile {
   punishmentOrder: string;   // શિક્ષાત્મક હુકમ
   firstAppeal: string;       // પ્રથમ અપીલ
   secondAppeal: string;      // દ્વિતીય અપીલ
+  petitionerType?: 'employee' | 'st'; // કેસ કોણે કર્યો: 'employee' (કર્મચારી) કે 'st' (એસ.ટી. નિગમ)
 }
 
 export type EmployeeProfileMap = Record<string, EmployeeProfile>;

@@ -1,19 +1,19 @@
 import React from 'react';
 import { SheetKey, EmployeeProfileMap } from '../types/case';
 import { getStatusCategory, extractDateFromStatus, getCaseKey } from '../data/initialData';
-import { Eye, Trash2, Calendar, FileText, User, Archive, Lock, Briefcase, Award } from 'lucide-react';
+import { Eye, Trash2, Calendar, FileText, User, Archive, Lock, Briefcase, Award, Landmark, Scale, Gavel, Layers } from 'lucide-react';
 
 interface TableViewProps {
-  sheetKey: SheetKey;
+  sheetKey: SheetKey | 'TOTAL';
   headers: string[];
-  rows: Array<{ originalIndex: number; data: string[] }>;
+  rows: Array<{ originalIndex: number; sheetKey?: SheetKey; data: string[] }>;
   selectedRowIndex: number | null;
   employeeProfiles?: EmployeeProfileMap;
   onSelectRow: (originalIndex: number) => void;
-  onCellChange: (originalIndex: number, colIndex: number, newValue: string) => void;
-  onViewDetails: (originalIndex: number) => void;
-  onDeleteRow: (originalIndex: number) => void;
-  onMoveToArchive?: (originalIndex: number) => void;
+  onCellChange: (originalIndex: number, colIndex: number, newValue: string, rowSheetKey?: SheetKey) => void;
+  onViewDetails: (originalIndex: number, rowSheetKey?: SheetKey) => void;
+  onDeleteRow: (originalIndex: number, rowSheetKey?: SheetKey) => void;
+  onMoveToArchive?: (originalIndex: number, rowSheetKey?: SheetKey) => void;
   isAdmin: boolean;
 }
 
@@ -64,7 +64,9 @@ export const TableView: React.FC<TableViewProps> = ({
   }, [headers, sheetKey]);
 
   const headerBg =
-    sheetKey === 'HC CASE'
+    sheetKey === 'TOTAL'
+      ? '#0f172a'
+      : sheetKey === 'HC CASE'
       ? '#1e3a8a'
       : sheetKey === 'LABOUR CASE'
       ? '#065f46'
@@ -116,7 +118,8 @@ export const TableView: React.FC<TableViewProps> = ({
                 </td>
               </tr>
             ) : (
-              rows.map(({ originalIndex, data: rowData }) => {
+              rows.map((row) => {
+                const { originalIndex, data: rowData } = row;
                 const isSelected = selectedRowIndex === originalIndex;
                 const statusVal = rowData[statusColIndex] || '';
                 const advocateVal = (rowData[advocateColIndex] || '').trim();
@@ -131,9 +134,9 @@ export const TableView: React.FC<TableViewProps> = ({
 
                 return (
                   <tr
-                    key={originalIndex}
+                    key={`${row.sheetKey || sheetKey}-${originalIndex}`}
                     onClick={() => onSelectRow(originalIndex)}
-                    onDoubleClick={() => onViewDetails(originalIndex)}
+                    onDoubleClick={() => onViewDetails(originalIndex, row.sheetKey)}
                     style={{
                       backgroundColor: isSelected ? '#dbeafe' : undefined,
                       outline: isSelected ? '2px solid #2563eb' : undefined
@@ -156,6 +159,14 @@ export const TableView: React.FC<TableViewProps> = ({
                           fontWeight: '900',
                           fontFamily: 'monospace'
                         };
+                      } else if (sheetKey === 'TOTAL') {
+                        if (cIdx === 1) cellStyle = { backgroundColor: '#f8fafc', color: '#0f172a', fontWeight: 'bold' };
+                        else if (cIdx === 2) cellStyle = { backgroundColor: '#eff6ff', color: '#1e40af', fontWeight: 'bold' };
+                        else if (cIdx === 3) cellStyle = { backgroundColor: '#fefce8', color: '#854d0e' };
+                        else if (cIdx === 4) cellStyle = { backgroundColor: '#f3e8ff', color: '#581c87' };
+                        else if (cIdx === 5) cellStyle = { backgroundColor: '#dcfce7', color: '#14532d', fontWeight: '600' };
+                        else if (cIdx === 6) cellStyle = { backgroundColor: '#ffffff', color: '#0f172a' };
+                        else if (cIdx === 7) cellStyle = { backgroundColor: '#fff7ed' };
                       } else if (sheetKey === 'HC CASE') {
                         if (cIdx === 1) cellStyle = { backgroundColor: '#e0f2fe', color: '#0369a1', fontWeight: 'bold' };
                         else if (cIdx === 2) cellStyle = { backgroundColor: '#fef3c7', color: '#92400e' };
@@ -173,6 +184,8 @@ export const TableView: React.FC<TableViewProps> = ({
                         else if (cIdx === 6) cellStyle = { backgroundColor: '#fff7ed' };
                       }
 
+                      const isCourtCol = sheetKey === 'TOTAL' && cIdx === 1;
+
                       return (
                         <td
                           key={cIdx}
@@ -185,6 +198,20 @@ export const TableView: React.FC<TableViewProps> = ({
                           {cIdx === 0 ? (
                             <div className="text-center font-mono font-black text-xs py-0.5">
                               {val || (originalIndex - 1)}
+                            </div>
+                          ) : isCourtCol ? (
+                            <div>
+                              <span
+                                style={{
+                                  backgroundColor: val.includes('હાઈકોર્ટ') ? '#dbeafe' : val.includes('લેબર') ? '#d1fae5' : '#ede9fe',
+                                  color: val.includes('હાઈકોર્ટ') ? '#1e40af' : val.includes('લેબર') ? '#065f46' : '#5b21b6',
+                                  border: `1.5px solid ${val.includes('હાઈકોર્ટ') ? '#93c5fd' : val.includes('લેબર') ? '#6ee7b7' : '#c4b5fd'}`
+                                }}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-black shadow-2xs"
+                              >
+                                {val.includes('હાઈકોર્ટ') ? <Landmark className="w-3.5 h-3.5 text-blue-700" /> : val.includes('લેબર') ? <Scale className="w-3.5 h-3.5 text-emerald-700" /> : <Gavel className="w-3.5 h-3.5 text-purple-700" />}
+                                <span>{val}</span>
+                              </span>
                             </div>
                           ) : isAdvocateCol ? (
                             <div>
@@ -203,7 +230,8 @@ export const TableView: React.FC<TableViewProps> = ({
                           ) : isEmployeeCol ? (
                             <div className="space-y-1.5 py-0.5">
                               {(() => {
-                                const caseKey = getCaseKey(sheetKey, rowData, originalIndex);
+                                const originSheet = row.sheetKey || (sheetKey === 'TOTAL' ? (rowData[1]?.includes('હાઈકોર્ટ') ? 'HC CASE' : rowData[1]?.includes('લેબર') ? 'LABOUR CASE' : 'IT CASE') : sheetKey);
+                                const caseKey = getCaseKey(originSheet, rowData, originalIndex);
                                 const profile = employeeProfiles?.[caseKey] || Object.values(employeeProfiles || {}).find(p => 
                                   (p.employeeName && val.includes(p.employeeName)) || (p.pfNo && val.includes(p.pfNo))
                                 );
@@ -365,7 +393,7 @@ export const TableView: React.FC<TableViewProps> = ({
                               contentEditable={isAdmin}
                               suppressContentEditableWarning
                               onBlur={(e) =>
-                                isAdmin && onCellChange(originalIndex, cIdx, e.currentTarget.innerText)
+                                isAdmin && onCellChange(originalIndex, cIdx, e.currentTarget.innerText, row.sheetKey)
                               }
                               style={{
                                 color: '#0f172a',
@@ -388,7 +416,7 @@ export const TableView: React.FC<TableViewProps> = ({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            onViewDetails(originalIndex);
+                            onViewDetails(originalIndex, row.sheetKey);
                           }}
                           style={{ backgroundColor: '#2563eb', color: '#ffffff' }}
                           title="કેસ વિગત જુઓ"
@@ -403,7 +431,7 @@ export const TableView: React.FC<TableViewProps> = ({
                             onClick={(e) => {
                               e.stopPropagation();
                               if (confirm(`શું આ કેસ (${rowData[3] || rowData[1]}) નિકાલ થયેલ છે? તેને નિકાલ આર્કાઇવમાં ખસેડી મૂળ પેન્ડિંગ શીટમાંથી ડિલીટ કરવો છે?`)) {
-                                onMoveToArchive(originalIndex);
+                                onMoveToArchive(originalIndex, row.sheetKey);
                               }
                             }}
                             style={{ backgroundColor: '#059669', color: '#ffffff' }}
@@ -418,7 +446,7 @@ export const TableView: React.FC<TableViewProps> = ({
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              onDeleteRow(originalIndex);
+                              onDeleteRow(originalIndex, row.sheetKey);
                             }}
                             style={{ backgroundColor: '#dc2626', color: '#ffffff' }}
                             title="કેસ ડિલીટ કરો"

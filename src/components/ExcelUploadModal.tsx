@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
-import { SheetKey, SheetDataMap } from '../types/case';
+import { SheetKey, SheetDataMap, ActiveTab } from '../types/case';
 import { SHEET_CONFIGS, isValidCaseRow } from '../data/initialData';
 import { 
   Upload, 
@@ -21,7 +21,7 @@ import {
 
 interface ExcelUploadModalProps {
   isOpen: boolean;
-  currentActiveSheet: SheetKey | 'SUMMARY' | 'CALENDAR';
+  currentActiveSheet: ActiveTab;
   existingData: SheetDataMap;
   isAdmin: boolean;
   onAdminLoginRequired: () => void;
@@ -76,7 +76,7 @@ export const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
     }
 
     // If current tab is a valid sheet, map to it for single-sheet file
-    if (currentActiveSheet !== 'SUMMARY' && currentActiveSheet !== 'CALENDAR') {
+    if (currentActiveSheet !== 'SUMMARY' && currentActiveSheet !== 'CALENDAR' && currentActiveSheet !== 'TOTAL') {
       return currentActiveSheet;
     }
 

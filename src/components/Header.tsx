@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SheetKey, AuthUser } from '../types/case';
+import { SheetKey, ActiveTab, AuthUser } from '../types/case';
 import { 
   Landmark, 
   Scale, 
@@ -21,12 +21,13 @@ import {
   Eye,
   LogOut,
   Menu,
-  X
+  X,
+  Layers
 } from 'lucide-react';
 
 interface HeaderProps {
-  activeSheet: SheetKey | 'SUMMARY' | 'CALENDAR';
-  onSelectTab: (tab: SheetKey | 'SUMMARY' | 'CALENDAR') => void;
+  activeSheet: ActiveTab;
+  onSelectTab: (tab: ActiveTab) => void;
   onOpenAddModal: () => void;
   onOpenExcelUpload: () => void;
   onOpenNotifications: () => void;
@@ -194,6 +195,19 @@ export const Header: React.FC<HeaderProps> = ({
           style={{ backgroundColor: '#f1f5f9', border: '1.5px solid #cbd5e1' }}
           className="hidden xl:flex items-center gap-1 p-1 rounded-xl"
         >
+          <button
+            onClick={() => onSelectTab('TOTAL')}
+            style={{
+              backgroundColor: activeSheet === 'TOTAL' ? '#0f172a' : 'transparent',
+              color: activeSheet === 'TOTAL' ? '#fde047' : '#1e293b'
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black rounded-lg transition-all whitespace-nowrap shadow-2xs"
+            title="તમામ હાઈકોર્ટ, લેબર અને ઔદ્યોગિક કોર્ટના કુલ કેસો"
+          >
+            <Layers className="w-3.5 h-3.5 text-amber-400" />
+            <span>કુલ તમામ કેસો ({totalCases})</span>
+          </button>
+
           <button
             onClick={() => onSelectTab('HC CASE')}
             style={{
@@ -384,6 +398,18 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Mobile/Tablet Horizontal Scrollable Navigation Strip */}
       <div className="flex xl:hidden border-t border-slate-200 overflow-x-auto px-2 py-1.5 bg-slate-100 gap-1.5 scrollbar-none">
+        <button
+          onClick={() => onSelectTab('TOTAL')}
+          style={{
+            backgroundColor: activeSheet === 'TOTAL' ? '#0f172a' : '#ffffff',
+            color: activeSheet === 'TOTAL' ? '#fde047' : '#1e293b',
+            border: '1.5px solid #cbd5e1'
+          }}
+          className="px-3 py-1.5 text-xs font-black rounded-lg whitespace-nowrap flex items-center gap-1.5 shadow-2xs shrink-0"
+        >
+          <Layers className="w-3.5 h-3.5 text-amber-400" />
+          <span>કુલ કેસો ({totalCases})</span>
+        </button>
         <button
           onClick={() => onSelectTab('HC CASE')}
           style={{
