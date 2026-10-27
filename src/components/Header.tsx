@@ -22,7 +22,9 @@ import {
   LogOut,
   Menu,
   X,
-  Layers
+  Layers,
+  Pencil,
+  Check
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -40,6 +42,20 @@ interface HeaderProps {
   currentUser: AuthUser | null;
   onOpenLogin: () => void;
   onLogout: () => void;
+  currentSheetTitle: string;
+  stats: {
+    total: number;
+    hcCount: number;
+    labourCount: number;
+    itCount: number;
+    disposedCount: number;
+  };
+  isEditingTitle?: boolean;
+  titleEditValue?: string;
+  setTitleEditValue?: (v: string) => void;
+  setIsEditingTitle?: (v: boolean) => void;
+  onSaveTitle?: (v: string) => void;
+  isSheetConfigKey?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -56,7 +72,15 @@ export const Header: React.FC<HeaderProps> = ({
   totalCases,
   currentUser,
   onOpenLogin,
-  onLogout
+  onLogout,
+  currentSheetTitle,
+  stats,
+  isEditingTitle = false,
+  titleEditValue = '',
+  setTitleEditValue,
+  setIsEditingTitle,
+  onSaveTitle,
+  isSheetConfigKey = false
 }) => {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -190,97 +214,6 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Desktop Navigation Links */}
-        <nav 
-          style={{ backgroundColor: '#f1f5f9', border: '1.5px solid #cbd5e1' }}
-          className="hidden xl:flex items-center gap-1 p-1 rounded-xl"
-        >
-          <button
-            onClick={() => onSelectTab('TOTAL')}
-            style={{
-              backgroundColor: activeSheet === 'TOTAL' ? '#0f172a' : 'transparent',
-              color: activeSheet === 'TOTAL' ? '#fde047' : '#1e293b'
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black rounded-lg transition-all whitespace-nowrap shadow-2xs"
-            title="તમામ હાઈકોર્ટ, લેબર અને ઔદ્યોગિક કોર્ટના કુલ કેસો"
-          >
-            <Layers className="w-3.5 h-3.5 text-amber-400" />
-            <span>કુલ તમામ કેસો ({totalCases})</span>
-          </button>
-
-          <button
-            onClick={() => onSelectTab('HC CASE')}
-            style={{
-              backgroundColor: activeSheet === 'HC CASE' ? '#1d4ed8' : 'transparent',
-              color: activeSheet === 'HC CASE' ? '#ffffff' : '#334155'
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black rounded-lg transition-all whitespace-nowrap"
-          >
-            <Landmark className="w-3.5 h-3.5" />
-            <span>હાઈકોર્ટ કેસ</span>
-          </button>
-
-          <button
-            onClick={() => onSelectTab('LABOUR CASE')}
-            style={{
-              backgroundColor: activeSheet === 'LABOUR CASE' ? '#059669' : 'transparent',
-              color: activeSheet === 'LABOUR CASE' ? '#ffffff' : '#334155'
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black rounded-lg transition-all whitespace-nowrap"
-          >
-            <Scale className="w-3.5 h-3.5" />
-            <span>લેબર કોર્ટ કેસ</span>
-          </button>
-
-          <button
-            onClick={() => onSelectTab('IT CASE')}
-            style={{
-              backgroundColor: activeSheet === 'IT CASE' ? '#7c3aed' : 'transparent',
-              color: activeSheet === 'IT CASE' ? '#ffffff' : '#334155'
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black rounded-lg transition-all whitespace-nowrap"
-          >
-            <Gavel className="w-3.5 h-3.5" />
-            <span>ઔદ્યોગિક (IT)</span>
-          </button>
-
-          <button
-            onClick={() => onSelectTab('DISPOSED ARCHIVE')}
-            style={{
-              backgroundColor: activeSheet === 'DISPOSED ARCHIVE' ? '#0d9488' : 'transparent',
-              color: activeSheet === 'DISPOSED ARCHIVE' ? '#ffffff' : '#334155'
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black rounded-lg transition-all whitespace-nowrap"
-          >
-            <Archive className="w-3.5 h-3.5" />
-            <span>નિકાલ</span>
-          </button>
-
-          <button
-            onClick={() => onSelectTab('SUMMARY')}
-            style={{
-              backgroundColor: activeSheet === 'SUMMARY' ? '#d97706' : 'transparent',
-              color: activeSheet === 'SUMMARY' ? '#ffffff' : '#334155'
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black rounded-lg transition-all whitespace-nowrap"
-          >
-            <GraduationCap className="w-3.5 h-3.5" />
-            <span>👤 એડવોકેટ</span>
-          </button>
-
-          <button
-            onClick={() => onSelectTab('CALENDAR')}
-            style={{
-              backgroundColor: activeSheet === 'CALENDAR' ? '#ea580c' : 'transparent',
-              color: activeSheet === 'CALENDAR' ? '#ffffff' : '#334155'
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-black rounded-lg transition-all whitespace-nowrap"
-          >
-            <CalendarIcon className="w-3.5 h-3.5" />
-            <span>📅 મુદત કેલેન્ડર</span>
-          </button>
-        </nav>
-
         {/* Primary Action Buttons */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {isAdmin ? (
@@ -396,92 +329,168 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Mobile/Tablet Horizontal Scrollable Navigation Strip */}
-      <div className="flex xl:hidden border-t border-slate-200 overflow-x-auto px-2 py-1.5 bg-slate-100 gap-1.5 scrollbar-none">
-        <button
-          onClick={() => onSelectTab('TOTAL')}
-          style={{
-            backgroundColor: activeSheet === 'TOTAL' ? '#0f172a' : '#ffffff',
-            color: activeSheet === 'TOTAL' ? '#fde047' : '#1e293b',
-            border: '1.5px solid #cbd5e1'
-          }}
-          className="px-3 py-1.5 text-xs font-black rounded-lg whitespace-nowrap flex items-center gap-1.5 shadow-2xs shrink-0"
-        >
-          <Layers className="w-3.5 h-3.5 text-amber-400" />
-          <span>કુલ કેસો ({totalCases})</span>
-        </button>
-        <button
-          onClick={() => onSelectTab('HC CASE')}
-          style={{
-            backgroundColor: activeSheet === 'HC CASE' ? '#1d4ed8' : '#ffffff',
-            color: activeSheet === 'HC CASE' ? '#ffffff' : '#1e293b',
-            border: '1.5px solid #cbd5e1'
-          }}
-          className="px-3 py-1.5 text-xs font-black rounded-lg whitespace-nowrap flex items-center gap-1.5 shadow-2xs shrink-0"
-        >
-          <Landmark className="w-3.5 h-3.5" />
-          <span>હાઈકોર્ટ</span>
-        </button>
-        <button
-          onClick={() => onSelectTab('LABOUR CASE')}
-          style={{
-            backgroundColor: activeSheet === 'LABOUR CASE' ? '#059669' : '#ffffff',
-            color: activeSheet === 'LABOUR CASE' ? '#ffffff' : '#1e293b',
-            border: '1.5px solid #cbd5e1'
-          }}
-          className="px-3 py-1.5 text-xs font-black rounded-lg whitespace-nowrap flex items-center gap-1.5 shadow-2xs shrink-0"
-        >
-          <Scale className="w-3.5 h-3.5" />
-          <span>લેબર કોર્ટ</span>
-        </button>
-        <button
-          onClick={() => onSelectTab('IT CASE')}
-          style={{
-            backgroundColor: activeSheet === 'IT CASE' ? '#7c3aed' : '#ffffff',
-            color: activeSheet === 'IT CASE' ? '#ffffff' : '#1e293b',
-            border: '1.5px solid #cbd5e1'
-          }}
-          className="px-3 py-1.5 text-xs font-black rounded-lg whitespace-nowrap flex items-center gap-1.5 shadow-2xs shrink-0"
-        >
-          <Gavel className="w-3.5 h-3.5" />
-          <span>ઔદ્યોગિક (IT)</span>
-        </button>
-        <button
-          onClick={() => onSelectTab('DISPOSED ARCHIVE')}
-          style={{
-            backgroundColor: activeSheet === 'DISPOSED ARCHIVE' ? '#0d9488' : '#ffffff',
-            color: activeSheet === 'DISPOSED ARCHIVE' ? '#ffffff' : '#1e293b',
-            border: '1.5px solid #cbd5e1'
-          }}
-          className="px-3 py-1.5 text-xs font-black rounded-lg whitespace-nowrap flex items-center gap-1.5 shadow-2xs shrink-0"
-        >
-          <Archive className="w-3.5 h-3.5" />
-          <span>નિકાલ</span>
-        </button>
-        <button
-          onClick={() => onSelectTab('SUMMARY')}
-          style={{
-            backgroundColor: activeSheet === 'SUMMARY' ? '#d97706' : '#ffffff',
-            color: activeSheet === 'SUMMARY' ? '#ffffff' : '#1e293b',
-            border: '1.5px solid #cbd5e1'
-          }}
-          className="px-3 py-1.5 text-xs font-black rounded-lg whitespace-nowrap flex items-center gap-1.5 shadow-2xs shrink-0"
-        >
-          <GraduationCap className="w-3.5 h-3.5" />
-          <span>એડવોકેટ</span>
-        </button>
-        <button
-          onClick={() => onSelectTab('CALENDAR')}
-          style={{
-            backgroundColor: activeSheet === 'CALENDAR' ? '#ea580c' : '#ffffff',
-            color: activeSheet === 'CALENDAR' ? '#ffffff' : '#1e293b',
-            border: '1.5px solid #cbd5e1'
-          }}
-          className="px-3 py-1.5 text-xs font-black rounded-lg whitespace-nowrap flex items-center gap-1.5 shadow-2xs shrink-0"
-        >
-          <CalendarIcon className="w-3.5 h-3.5" />
-          <span>મુદત કેલેન્ડર</span>
-        </button>
+      {/* Sheet Title Bar: "કુલ તમામ પેન્ડિંગ કેસોની સંયુક્ત યાદી (હાઈકોર્ટ + લેબર કોર્ટ + ઔદ્યોગિક ટ્રિબ્યુનલ)" */}
+      <div 
+        style={{
+          backgroundColor: activeSheet === 'TOTAL' ? '#f0fdfa' : activeSheet === 'HC CASE' ? '#eff6ff' : activeSheet === 'LABOUR CASE' ? '#ecfdf5' : activeSheet === 'IT CASE' ? '#faf5ff' : activeSheet === 'CALENDAR' ? '#fff7ed' : activeSheet === 'SUMMARY' ? '#fffbeb' : '#f0fdfa',
+          borderColor: activeSheet === 'TOTAL' ? '#99f6e4' : activeSheet === 'HC CASE' ? '#bfdbfe' : activeSheet === 'LABOUR CASE' ? '#a7f3d0' : activeSheet === 'IT CASE' ? '#ddd6fe' : activeSheet === 'CALENDAR' ? '#fed7aa' : activeSheet === 'SUMMARY' ? '#fde68a' : '#99f6e4'
+        }}
+        className="border-t border-b px-3 sm:px-6 py-2.5 sm:py-3 transition-colors shadow-2xs"
+      >
+        <div className="max-w-7xl mx-auto flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div 
+              style={{
+                backgroundColor: activeSheet === 'TOTAL' ? '#0d9488' : activeSheet === 'HC CASE' ? '#1d4ed8' : activeSheet === 'LABOUR CASE' ? '#059669' : activeSheet === 'IT CASE' ? '#7c3aed' : activeSheet === 'CALENDAR' ? '#ea580c' : activeSheet === 'SUMMARY' ? '#d97706' : '#0d9488',
+                color: '#ffffff'
+              }}
+              className="w-10 h-10 rounded-xl flex items-center justify-center font-black shadow-xs shrink-0"
+            >
+              {activeSheet === 'TOTAL' ? <Layers className="w-5 h-5 text-amber-300" /> : activeSheet === 'HC CASE' ? <Landmark className="w-5 h-5" /> : activeSheet === 'LABOUR CASE' ? <Scale className="w-5 h-5" /> : activeSheet === 'IT CASE' ? <Gavel className="w-5 h-5" /> : activeSheet === 'CALENDAR' ? <CalendarIcon className="w-5 h-5" /> : activeSheet === 'SUMMARY' ? <GraduationCap className="w-5 h-5" /> : <Archive className="w-5 h-5" />}
+            </div>
+
+            <div className="flex-1 min-w-0">
+              {isEditingTitle && isAdmin ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="text"
+                    value={titleEditValue}
+                    onChange={(e) => setTitleEditValue?.(e.target.value)}
+                    className="flex-1 min-w-[280px] max-w-xl px-3 py-1.5 text-xs sm:text-sm font-bold border-2 border-blue-500 rounded-xl bg-white shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-900"
+                    placeholder="નવું હેડિંગ દાખલ કરો..."
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => onSaveTitle?.(titleEditValue || '')}
+                    className="px-3.5 py-1.5 text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>સેવ કરો</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingTitle?.(false)}
+                    className="px-3 py-1.5 text-xs font-bold bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl transition-all cursor-pointer"
+                  >
+                    રદ કરો
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-sm sm:text-base md:text-lg font-black text-slate-900 tracking-tight leading-tight">
+                    {currentSheetTitle}
+                  </h2>
+                  {isAdmin && isSheetConfigKey && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTitleEditValue?.(currentSheetTitle);
+                        setIsEditingTitle?.(true);
+                      }}
+                      title="આ હેડિંગ સીધું બદલવા માટે ક્લિક કરો"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-300 rounded-lg cursor-pointer transition-colors shadow-2xs"
+                    >
+                      <Pencil className="w-3 h-3" />
+                      <span>હેડિંગ બદલો</span>
+                    </button>
+                  )}
+                </div>
+              )}
+              <p className="text-xs font-bold text-slate-600 mt-0.5">
+                {activeSheet === 'TOTAL' ? 'તમામ અદાલતો (હાઈકોર્ટ, લેબર, IT)' : activeSheet === 'CALENDAR' ? 'કોર્ટ સુનાવણી કેલેન્ડર' : activeSheet === 'SUMMARY' ? 'પેનલ એડવોકેટ વિશ્લેષણ' : activeSheet === 'DISPOSED ARCHIVE' ? 'નિકાલ થયેલા કેસોનું આર્કાઇવ' : activeSheet} • પેન્ડિંગ કેસો: <strong className="text-blue-900 font-mono text-sm">{activeSheet === 'TOTAL' ? stats.total : activeSheet === 'HC CASE' ? stats.hcCount : activeSheet === 'LABOUR CASE' ? stats.labourCount : activeSheet === 'IT CASE' ? stats.itCount : stats.total}</strong>
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Tab Switcher Buttons */}
+          <div className="flex items-center gap-1.5 sm:gap-2 text-xs font-black flex-wrap shrink-0 overflow-x-auto pb-1 xl:pb-0">
+            <button
+              onClick={() => onSelectTab('TOTAL')}
+              style={{
+                backgroundColor: activeSheet === 'TOTAL' ? '#0d9488' : '#ffffff',
+                color: activeSheet === 'TOTAL' ? '#ffffff' : '#115e59',
+                border: '2px solid #0d9488'
+              }}
+              className="px-3 sm:px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>કુલ તમામ ({stats.total})</span>
+            </button>
+            <button
+              onClick={() => onSelectTab('HC CASE')}
+              style={{
+                backgroundColor: activeSheet === 'HC CASE' ? '#1d4ed8' : '#ffffff',
+                color: activeSheet === 'HC CASE' ? '#ffffff' : '#1e3a8a',
+                border: '2px solid #1d4ed8'
+              }}
+              className="px-3 sm:px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+            >
+              <Landmark className="w-3.5 h-3.5" />
+              <span>હાઈકોર્ટ ({stats.hcCount})</span>
+            </button>
+            <button
+              onClick={() => onSelectTab('LABOUR CASE')}
+              style={{
+                backgroundColor: activeSheet === 'LABOUR CASE' ? '#059669' : '#ffffff',
+                color: activeSheet === 'LABOUR CASE' ? '#ffffff' : '#065f46',
+                border: '2px solid #059669'
+              }}
+              className="px-3 sm:px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+            >
+              <Scale className="w-3.5 h-3.5" />
+              <span>લેબર ({stats.labourCount})</span>
+            </button>
+            <button
+              onClick={() => onSelectTab('IT CASE')}
+              style={{
+                backgroundColor: activeSheet === 'IT CASE' ? '#7c3aed' : '#ffffff',
+                color: activeSheet === 'IT CASE' ? '#ffffff' : '#581c87',
+                border: '2px solid #7c3aed'
+              }}
+              className="px-3 sm:px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+            >
+              <Gavel className="w-3.5 h-3.5" />
+              <span>ઔદ્યોગિક ({stats.itCount})</span>
+            </button>
+            <button
+              onClick={() => onSelectTab('CALENDAR')}
+              style={{
+                backgroundColor: activeSheet === 'CALENDAR' ? '#ea580c' : '#fff7ed',
+                color: activeSheet === 'CALENDAR' ? '#ffffff' : '#c2410c',
+                border: '2px solid #ea580c'
+              }}
+              className="px-3 sm:px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 hover:bg-orange-100 cursor-pointer whitespace-nowrap"
+            >
+              <CalendarIcon className="w-3.5 h-3.5" />
+              <span>📅 મુદત કેલેન્ડર</span>
+            </button>
+            <button
+              onClick={() => onSelectTab('SUMMARY')}
+              style={{
+                backgroundColor: activeSheet === 'SUMMARY' ? '#d97706' : '#fffbeb',
+                color: activeSheet === 'SUMMARY' ? '#ffffff' : '#92400e',
+                border: '2px solid #f59e0b'
+              }}
+              className="px-3 sm:px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 hover:bg-amber-100 cursor-pointer whitespace-nowrap"
+            >
+              <GraduationCap className="w-3.5 h-3.5" />
+              <span>👤 એડવોકેટ</span>
+            </button>
+            <button
+              onClick={() => onSelectTab('DISPOSED ARCHIVE')}
+              style={{
+                backgroundColor: activeSheet === 'DISPOSED ARCHIVE' ? '#0d9488' : '#f0fdfa',
+                color: activeSheet === 'DISPOSED ARCHIVE' ? '#ffffff' : '#0f766e',
+                border: '2px solid #0d9488'
+              }}
+              className="px-3 sm:px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 hover:bg-teal-100 cursor-pointer whitespace-nowrap"
+            >
+              <Archive className="w-3.5 h-3.5" />
+              <span>📁 નિકાલ ({stats.disposedCount})</span>
+            </button>
+          </div>
+        </div>
       </div>
     </header>
   );

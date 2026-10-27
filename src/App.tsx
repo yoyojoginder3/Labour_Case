@@ -1095,6 +1095,14 @@ export default function App() {
           localStorage.removeItem(STORAGE_USER_KEY);
           showToast('સફળતાપૂર્વક લોગઆઉટ થયા! લોગીન પેજ પર રીટર્ન આવ્યા.', 'info');
         }}
+        currentSheetTitle={currentSheetTitle}
+        stats={stats}
+        isEditingTitle={isEditingTitle}
+        titleEditValue={titleEditValue}
+        setTitleEditValue={setTitleEditValue}
+        setIsEditingTitle={setIsEditingTitle}
+        onSaveTitle={handleSaveTitle}
+        isSheetConfigKey={isSheetConfigKey}
       />
 
       {/* Main Viewport */}
@@ -1192,164 +1200,6 @@ export default function App() {
           />
         ) : (
           <div>
-            {/* Sheet Title Bar */}
-            <div 
-              style={{
-                backgroundColor: activeSheet === 'TOTAL' ? '#f0fdfa' : activeSheet === 'HC CASE' ? '#eff6ff' : activeSheet === 'LABOUR CASE' ? '#ecfdf5' : '#faf5ff',
-                borderColor: activeSheet === 'TOTAL' ? '#5eead4' : activeSheet === 'HC CASE' ? '#93c5fd' : activeSheet === 'LABOUR CASE' ? '#6ee7b7' : '#c084fc'
-              }}
-              className="rounded-2xl border-2 px-5 py-3.5 mb-4 shadow-sm flex flex-wrap items-center justify-between gap-3"
-            >
-              <div className="flex items-center gap-3">
-                <div 
-                  style={{
-                    backgroundColor: activeSheet === 'TOTAL' ? '#0d9488' : activeSheet === 'HC CASE' ? '#1d4ed8' : activeSheet === 'LABOUR CASE' ? '#059669' : '#7c3aed',
-                    color: '#ffffff'
-                  }}
-                  className="w-10 h-10 rounded-xl flex items-center justify-center font-black shadow-xs"
-                >
-                  {activeSheet === 'TOTAL' ? <Layers className="w-5 h-5" /> : activeSheet === 'HC CASE' ? <Landmark className="w-5 h-5" /> : activeSheet === 'LABOUR CASE' ? <Scale className="w-5 h-5" /> : <Gavel className="w-5 h-5" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  {isEditingTitle && isAdmin ? (
-                    <div className="flex flex-wrap items-center gap-2 mt-1">
-                      <input
-                        type="text"
-                        value={titleEditValue}
-                        onChange={(e) => setTitleEditValue(e.target.value)}
-                        className="flex-1 min-w-[280px] max-w-xl px-3 py-1.5 text-xs sm:text-sm font-bold border-2 border-blue-500 rounded-xl bg-white shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-400 text-slate-900"
-                        placeholder="નવું હેડિંગ / તારીખ દાખલ કરો..."
-                        autoFocus
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleSaveTitle(titleEditValue)}
-                        className="px-3.5 py-1.5 text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1"
-                      >
-                        <Check className="w-3.5 h-3.5" />
-                        <span>સેવ કરો</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setIsEditingTitle(false)}
-                        className="px-3 py-1.5 text-xs font-bold bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl transition-all cursor-pointer"
-                      >
-                        રદ કરો
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
-                        {currentSheetTitle}
-                      </h2>
-                      {isAdmin && isSheetConfigKey && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setTitleEditValue(currentSheetTitle);
-                            setIsEditingTitle(true);
-                          }}
-                          title="આ હેડિંગ અથવા તારીખ સીધું બદલવા માટે ક્લિક કરો"
-                          className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-300 rounded-lg cursor-pointer transition-colors shadow-2xs"
-                        >
-                          <Pencil className="w-3 h-3" />
-                          <span>હેડિંગ બદલો</span>
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  <p className="text-xs font-bold text-slate-600 mt-0.5">
-                    {activeSheet === 'TOTAL' ? 'તમામ અદાલતો (હાઈકોર્ટ, લેબર, IT)' : activeSheet} • પેન્ડિંગ કેસો: <strong className="text-blue-900 font-mono text-sm">{activeSheet === 'TOTAL' ? stats.total : (data[activeSheet]?.length ? data[activeSheet].length - 2 : 0)}</strong>
-                  </p>
-                </div>
-              </div>
-
-              {/* Quick Tab Switcher Pills */}
-              <div className="flex items-center gap-2 text-xs font-black flex-wrap">
-                <button
-                  onClick={() => setActiveSheet('TOTAL')}
-                  style={{
-                    backgroundColor: activeSheet === 'TOTAL' ? '#0d9488' : '#ffffff',
-                    color: activeSheet === 'TOTAL' ? '#ffffff' : '#115e59',
-                    border: '2px solid #0d9488'
-                  }}
-                  className="px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Layers className="w-3.5 h-3.5" />
-                  <span>કુલ તમામ ({stats.total})</span>
-                </button>
-                <button
-                  onClick={() => setActiveSheet('HC CASE')}
-                  style={{
-                    backgroundColor: activeSheet === 'HC CASE' ? '#1d4ed8' : '#ffffff',
-                    color: activeSheet === 'HC CASE' ? '#ffffff' : '#1e3a8a',
-                    border: '2px solid #1d4ed8'
-                  }}
-                  className="px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Landmark className="w-3.5 h-3.5" />
-                  <span>હાઈકોર્ટ ({stats.hcCount})</span>
-                </button>
-                <button
-                  onClick={() => setActiveSheet('LABOUR CASE')}
-                  style={{
-                    backgroundColor: activeSheet === 'LABOUR CASE' ? '#059669' : '#ffffff',
-                    color: activeSheet === 'LABOUR CASE' ? '#ffffff' : '#065f46',
-                    border: '2px solid #059669'
-                  }}
-                  className="px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Scale className="w-3.5 h-3.5" />
-                  <span>લેબર ({stats.labourCount})</span>
-                </button>
-                <button
-                  onClick={() => setActiveSheet('IT CASE')}
-                  style={{
-                    backgroundColor: activeSheet === 'IT CASE' ? '#7c3aed' : '#ffffff',
-                    color: activeSheet === 'IT CASE' ? '#ffffff' : '#581c87',
-                    border: '2px solid #7c3aed'
-                  }}
-                  className="px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Gavel className="w-3.5 h-3.5" />
-                  <span>ઔદ્યોગિક ({stats.itCount})</span>
-                </button>
-                <button
-                  onClick={() => setActiveSheet('CALENDAR')}
-                  style={{
-                    backgroundColor: '#fff7ed',
-                    color: '#c2410c',
-                    border: '2px solid #ea580c'
-                  }}
-                  className="px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 hover:bg-orange-100 cursor-pointer"
-                >
-                  <span>📅 મુદત કેલેન્ડર</span>
-                </button>
-                <button
-                  onClick={() => setActiveSheet('SUMMARY')}
-                  style={{
-                    backgroundColor: '#fffbeb',
-                    color: '#92400e',
-                    border: '2px solid #f59e0b'
-                  }}
-                  className="px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 hover:bg-amber-100 cursor-pointer"
-                >
-                  <span>👤 એડવોકેટ</span>
-                </button>
-                <button
-                  onClick={() => setActiveSheet('DISPOSED ARCHIVE')}
-                  style={{
-                    backgroundColor: '#f0fdfa',
-                    color: '#0f766e',
-                    border: '2px solid #0d9488'
-                  }}
-                  className="px-3.5 py-1.5 rounded-xl transition-all shadow-xs flex items-center gap-1.5 hover:bg-teal-100 cursor-pointer"
-                >
-                  <span>📁 નિકાલ ({stats.disposedCount})</span>
-                </button>
-              </div>
-            </div>
-
             {/* Filter and Search Bar */}
             <FiltersBar
               filter={filter}
