@@ -16,7 +16,6 @@ import {
   getPetitionerType
 } from './data/initialData';
 import { Header } from './components/Header';
-import { StatsCards } from './components/StatsCards';
 import { FiltersBar } from './components/FiltersBar';
 import { TableView } from './components/TableView';
 import { CardsView } from './components/CardsView';
@@ -1157,20 +1156,6 @@ export default function App() {
             </div>
           </div>
         )}
-        {/* Statistics Metric Cards */}
-        <StatsCards
-          hcCount={stats.hcCount}
-          labourCount={stats.labourCount}
-          itCount={stats.itCount}
-          finalHearingCount={stats.finalHearingCount}
-          disposedCount={stats.disposedCount}
-          activeSheet={activeSheet}
-          onSelectTab={setActiveSheet}
-          onFilterStatus={(st) => {
-            setFilter((prev) => ({ ...prev, statusType: st }));
-            if (activeSheet === 'SUMMARY' || activeSheet === 'DISPOSED ARCHIVE') setActiveSheet('HC CASE');
-          }}
-        />
 
         {/* View Switcher based on Active Tab */}
         {activeSheet === 'SUMMARY' ? (
