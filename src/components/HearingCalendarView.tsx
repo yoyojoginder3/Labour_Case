@@ -62,16 +62,36 @@ function parseHearingDate(dateStr: string): { parsed: Date | null; dayKey: strin
   return { parsed: null, dayKey: '' };
 }
 
+const GUJARATI_MONTHS = [
+  'જાન્યુઆરી', 'ફેબ્રુઆરી', 'માર્ચ', 'એપ્રિલ', 'મે', 'જૂન',
+  'જુલાઈ', 'ઓગસ્ટ', 'સપ્ટેમ્બર', 'ઓક્ટોબર', 'નવેમ્બર', 'ડિસેમ્બર'
+];
+
+const GUJARATI_FULL_DAY_NAMES = [
+  'રવિવાર', 'સોમવાર', 'મંગળવાર', 'બુધવાર', 'ગુરુવાર', 'શુક્રવાર', 'શનિવાર'
+];
+
+const WEEK_DAY_NAMES = ['રવિ', 'સોમ', 'મંગળ', 'બુધ', 'ગુરુ', 'શુક્ર', 'શનિ'];
+
 export const HearingCalendarView: React.FC<HearingCalendarViewProps> = ({
   data,
   onSelectCase
 }) => {
-  // Current visible calendar month (Default: October 2026 since case data is centered around Oct 2026)
-  const [currentYear, setCurrentYear] = useState(2026);
-  const [currentMonth, setCurrentMonth] = useState(9); // 9 = October (0-indexed)
+  // Current real-world Today's Date
+  const today = useMemo(() => new Date(), []);
+  const todayYear = today.getFullYear();
+  const todayMonth = today.getMonth(); // 0-indexed (9 = October)
+  const todayDate = today.getDate();
+  const todayDayKey = `${todayYear}-${String(todayMonth + 1).padStart(2, '0')}-${String(todayDate).padStart(2, '0')}`;
+  const todayFormattedGujarati = `${todayDate} ${GUJARATI_MONTHS[todayMonth]} ${todayYear}, ${GUJARATI_FULL_DAY_NAMES[today.getDay()]}`;
+  const todayShortDate = `${String(todayDate).padStart(2, '0')}/${String(todayMonth + 1).padStart(2, '0')}/${todayYear}`;
+
+  // Current visible calendar month (Default: today's month & year)
+  const [currentYear, setCurrentYear] = useState(todayYear);
+  const [currentMonth, setCurrentMonth] = useState(todayMonth);
   
-  // Selected date filter (dayKey e.g. "2026-10-20" or null for all)
-  const [selectedDayKey, setSelectedDayKey] = useState<string | null>('2026-10-20');
+  // Selected date filter (Default: today's date)
+  const [selectedDayKey, setSelectedDayKey] = useState<string | null>(todayDayKey);
   const [courtFilter, setCourtFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -184,22 +204,34 @@ export const HearingCalendarView: React.FC<HearingCalendarViewProps> = ({
     const firstDayOfMonth = new Date(currentYear, currentMonth, 1).getDay(); // 0 = Sunday
     const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
     
-    const days: Array<{ dayNum: number; dayKey: string; isCurrentMonth: boolean; count: number }> = [];
+    const days: Array<{
+      dayNum: number;
+      dayKey: string;
+      isCurrentMonth: boolean;
+      count: number;
+      isToday: boolean;
+    }> = [];
 
     // Empty cells before first day
     for (let i = 0; i < firstDayOfMonth; i++) {
-      days.push({ dayNum: 0, dayKey: '', isCurrentMonth: false, count: 0 });
+      days.push({ dayNum: 0, dayKey: '', isCurrentMonth: false, count: 0, isToday: false });
     }
 
     // Days in current month
     for (let d = 1; d <= daysInMonth; d++) {
       const dayKey = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       const count = hearingsByDay[dayKey]?.length || 0;
-      days.push({ dayNum: d, dayKey, isCurrentMonth: true, count });
+      const isToday = dayKey === todayDayKey;
+      days.push({ dayNum: d, dayKey, isCurrentMonth: true, count, isToday });
     }
 
     return days;
-  }, [currentYear, currentMonth, hearingsByDay]);
+  }, [currentYear, currentMonth, hearingsByDay, todayDayKey]);
+
+  // Hearings specifically on today's date
+  const todayHearings = useMemo(() => {
+    return hearingsByDay[todayDayKey] || [];
+  }, [hearingsByDay, todayDayKey]);
 
   // Filtered hearings for the list view
   const activeHearings = useMemo(() => {
@@ -252,7 +284,7 @@ export const HearingCalendarView: React.FC<HearingCalendarViewProps> = ({
 
   return (
     <div className="space-y-5">
-      {/* Top Banner with Vibrant Amber/Blue Gradient */}
+      {/* Top Banner with Vibrant Gradient & Always-Visible Current Date */}
       <div 
         style={{
           background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 50%, #d97706 100%)',
@@ -275,30 +307,83 @@ export const HearingCalendarView: React.FC<HearingCalendarViewProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <button
+              type="button"
+              onClick={() => {
+                setCurrentMonth(todayMonth);
+                setCurrentYear(todayYear);
+                setSelectedDayKey(todayDayKey);
+              }}
+              style={{
+                backgroundColor: selectedDayKey === todayDayKey ? '#22c55e' : '#ffffff',
+                color: selectedDayKey === todayDayKey ? '#ffffff' : '#065f46',
+                border: '2px solid #22c55e'
+              }}
+              className="px-3.5 py-2 rounded-xl text-xs font-black transition-all shadow-md hover:scale-105 active:scale-95 flex items-center gap-1.5 cursor-pointer"
+            >
+              <span>🎯 આજે ({todayShortDate})</span>
+              {todayHearings.length > 0 && (
+                <span className="bg-amber-400 text-slate-900 text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+                  {todayHearings.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
               onClick={() => setSelectedDayKey(null)}
               style={{
                 backgroundColor: !selectedDayKey ? '#ffffff' : 'rgba(255,255,255,0.2)',
                 color: !selectedDayKey ? '#1e3a8a' : '#ffffff',
                 border: '2px solid rgba(255,255,255,0.4)'
               }}
-              className="px-4 py-2 rounded-xl text-xs font-black transition-all shadow-md hover:scale-105 active:scale-95"
+              className="px-3.5 py-2 rounded-xl text-xs font-black transition-all shadow-md hover:scale-105 active:scale-95 cursor-pointer"
             >
               બધી મુદતો ({allHearings.length})
             </button>
 
             <button
+              type="button"
               onClick={handlePrintDailyCauseList}
               style={{
                 background: 'linear-gradient(135deg, #f59e0b 0%, #ea580c 100%)',
                 color: '#ffffff'
               }}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black shadow-lg hover:brightness-110 active:scale-95 transition-all"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black shadow-lg hover:brightness-110 active:scale-95 transition-all cursor-pointer"
             >
               <Printer className="w-4 h-4 stroke-[2.5]" />
               <span>બોર્ડ પ્રિન્ટ કરો</span>
             </button>
+          </div>
+        </div>
+
+        {/* Prominent Real-time Today Date Indicator Strip */}
+        <div 
+          style={{ backgroundColor: 'rgba(15, 23, 42, 0.45)', border: '1.5px solid rgba(253, 224, 71, 0.5)' }}
+          className="mt-4 p-3.5 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs sm:text-sm backdrop-blur-xs"
+        >
+          <div className="flex items-center gap-2.5">
+            <span className="relative flex h-3.5 w-3.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-400"></span>
+            </span>
+            <span className="text-amber-200 font-bold">આજની વર્તમાન તારીખ (Current Date):</span>
+            <span className="text-white font-mono font-black text-sm sm:text-base bg-emerald-950/90 px-3 py-1 rounded-xl border border-emerald-400 shadow-inner">
+              {todayFormattedGujarati}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs font-bold text-amber-100">
+            {todayHearings.length > 0 ? (
+              <span className="bg-amber-500 text-slate-950 px-3 py-1 rounded-xl font-black shadow-xs">
+                🚨 આજે {todayHearings.length} કેસોની કોર્ટ સુનાવણી છે!
+              </span>
+            ) : (
+              <span className="bg-emerald-800/90 text-emerald-100 px-3 py-1 rounded-xl font-bold border border-emerald-400/40">
+                ✅ આજે કોઈ કેસની કોર્ટ મુદત નથી
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -312,10 +397,10 @@ export const HearingCalendarView: React.FC<HearingCalendarViewProps> = ({
             className="rounded-3xl p-4 sm:p-5 shadow-lg overflow-hidden"
           >
             {/* Calendar Month & Controls */}
-            <div className="flex items-center justify-between pb-3.5 border-b-2 border-slate-100">
+            <div className="flex items-center justify-between pb-3.5 border-b-2 border-slate-100 gap-2">
               <div className="flex items-center gap-2">
                 <span className="text-base sm:text-lg font-black text-slate-900">
-                  {gujaratiMonths[currentMonth]} {currentYear}
+                  {GUJARATI_MONTHS[currentMonth]} {currentYear}
                 </span>
                 <span 
                   style={{ backgroundColor: '#dbeafe', color: '#1e40af' }}
@@ -327,17 +412,36 @@ export const HearingCalendarView: React.FC<HearingCalendarViewProps> = ({
 
               <div className="flex items-center gap-1.5">
                 <button
+                  type="button"
+                  onClick={() => {
+                    setCurrentMonth(todayMonth);
+                    setCurrentYear(todayYear);
+                    setSelectedDayKey(todayDayKey);
+                  }}
+                  style={{
+                    backgroundColor: currentMonth === todayMonth && currentYear === todayYear && selectedDayKey === todayDayKey ? '#059669' : '#ecfdf5',
+                    color: currentMonth === todayMonth && currentYear === todayYear && selectedDayKey === todayDayKey ? '#ffffff' : '#047857',
+                    border: '1.5px solid #10b981'
+                  }}
+                  className="px-2.5 py-1.5 rounded-xl text-xs font-black shadow-2xs hover:scale-105 active:scale-95 transition-all flex items-center gap-1 cursor-pointer"
+                  title="આજના મહિના અને તારીખ પર જાઓ"
+                >
+                  <span>🎯 આજે</span>
+                </button>
+                <button
+                  type="button"
                   onClick={handlePrevMonth}
                   style={{ backgroundColor: '#f1f5f9', color: '#1e293b' }}
-                  className="p-1.5 rounded-xl hover:bg-slate-200 transition-colors"
+                  className="p-1.5 rounded-xl hover:bg-slate-200 transition-colors cursor-pointer"
                   title="પાછલો મહિનો"
                 >
                   <ChevronLeft className="w-5 h-5" />
                 </button>
                 <button
+                  type="button"
                   onClick={handleNextMonth}
                   style={{ backgroundColor: '#f1f5f9', color: '#1e293b' }}
-                  className="p-1.5 rounded-xl hover:bg-slate-200 transition-colors"
+                  className="p-1.5 rounded-xl hover:bg-slate-200 transition-colors cursor-pointer"
                   title="આગામી મહિનો"
                 >
                   <ChevronRight className="w-5 h-5" />
@@ -347,7 +451,7 @@ export const HearingCalendarView: React.FC<HearingCalendarViewProps> = ({
 
             {/* Weekdays Row */}
             <div className="grid grid-cols-7 gap-1 text-center my-2 text-xs font-black text-slate-500">
-              {weekDayNames.map((w, idx) => (
+              {WEEK_DAY_NAMES.map((w, idx) => (
                 <div key={w} className={`py-1.5 ${idx === 0 ? 'text-rose-600' : ''}`}>
                   {w}
                 </div>
@@ -358,11 +462,12 @@ export const HearingCalendarView: React.FC<HearingCalendarViewProps> = ({
             <div className="grid grid-cols-7 gap-1 text-center">
               {calendarDays.map((day, idx) => {
                 if (!day.isCurrentMonth) {
-                  return <div key={idx} className="h-11 sm:h-12" />;
+                  return <div key={idx} className="h-12 sm:h-14" />;
                 }
 
                 const isSelected = selectedDayKey === day.dayKey;
                 const hasHearings = day.count > 0;
+                const isToday = day.isToday;
 
                 return (
                   <button
@@ -371,26 +476,53 @@ export const HearingCalendarView: React.FC<HearingCalendarViewProps> = ({
                     onClick={() => setSelectedDayKey(day.dayKey)}
                     style={{
                       backgroundColor: isSelected
-                        ? '#1d4ed8'
+                        ? (isToday ? '#0f766e' : '#1d4ed8')
+                        : isToday
+                        ? '#dcfce7'
                         : hasHearings
                         ? '#fef3c7'
                         : '#f8fafc',
                       color: isSelected
                         ? '#ffffff'
+                        : isToday
+                        ? '#14532d'
                         : hasHearings
                         ? '#92400e'
                         : '#334155',
                       border: isSelected
-                        ? '2px solid #1e40af'
+                        ? `2.5px solid ${isToday ? '#34d399' : '#1e40af'}`
+                        : isToday
+                        ? '2.5px solid #16a34a'
                         : hasHearings
                         ? '2px solid #f59e0b'
-                        : '1px solid #e2e8f0'
+                        : '1px solid #e2e8f0',
+                      boxShadow: isToday ? '0 0 0 2px rgba(34, 197, 94, 0.4)' : undefined
                     }}
-                    className={`h-11 sm:h-12 rounded-2xl flex flex-col items-center justify-center relative transition-all hover:scale-105 shadow-2xs ${
-                      hasHearings ? 'font-black' : 'font-semibold'
+                    className={`h-12 sm:h-14 rounded-2xl flex flex-col items-center justify-center relative transition-all hover:scale-105 shadow-2xs ${
+                      hasHearings || isToday ? 'font-black' : 'font-semibold'
                     }`}
                   >
-                    <span className="text-xs sm:text-sm">{day.dayNum}</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs sm:text-sm font-mono">{day.dayNum}</span>
+                      {isToday && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-ping" title="આજની તારીખ" />
+                      )}
+                    </div>
+
+                    {/* Today Badge */}
+                    {isToday && (
+                      <span
+                        style={{
+                          backgroundColor: isSelected ? '#34d399' : '#16a34a',
+                          color: isSelected ? '#064e3b' : '#ffffff'
+                        }}
+                        className="text-[9px] font-black px-1.5 py-0.2 rounded-full uppercase tracking-tighter leading-none mt-0.5 shadow-2xs"
+                      >
+                        આજે
+                      </span>
+                    )}
+
+                    {/* Hearings Count Badge */}
                     {hasHearings && (
                       <span 
                         style={{
@@ -407,37 +539,66 @@ export const HearingCalendarView: React.FC<HearingCalendarViewProps> = ({
               })}
             </div>
 
+            {/* Color Legend */}
+            <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-[11px] font-bold text-slate-600">
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-md bg-emerald-100 border-2 border-emerald-500 inline-block" />
+                <span>આજની તારીખ (Today)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-md bg-amber-100 border-2 border-amber-500 inline-block" />
+                <span>મુદત કેસો (Hearings)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-md bg-blue-600 border border-blue-800 inline-block" />
+                <span>પસંદ કરેલ (Selected)</span>
+              </div>
+            </div>
+
             {/* Quick Presets Strip */}
-            <div className="mt-4 pt-3.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-1.5 text-xs font-bold">
+            <div className="mt-3.5 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-1.5 text-xs font-bold">
               <span className="text-slate-500">ઝડપી તારીખ:</span>
               <div className="flex flex-wrap gap-1.5">
                 <button
+                  type="button"
+                  onClick={() => {
+                    setCurrentMonth(todayMonth);
+                    setCurrentYear(todayYear);
+                    setSelectedDayKey(todayDayKey);
+                  }}
+                  style={{
+                    backgroundColor: selectedDayKey === todayDayKey ? '#059669' : '#dcfce7',
+                    color: selectedDayKey === todayDayKey ? '#ffffff' : '#14532d',
+                    border: '1.5px solid #16a34a'
+                  }}
+                  className="px-2.5 py-1 rounded-lg text-xs font-black transition-all shadow-2xs hover:scale-105 active:scale-95 cursor-pointer flex items-center gap-1"
+                >
+                  <span>📍 આજે ({todayShortDate})</span>
+                  {todayHearings.length > 0 && (
+                    <span className="bg-emerald-700 text-white px-1.5 rounded-full text-[10px]">
+                      {todayHearings.length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
                   onClick={() => {
                     setCurrentMonth(9); // October
                     setCurrentYear(2026);
-                    setSelectedDayKey('2026-10-15');
-                  }}
-                  className="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-900 hover:bg-amber-200"
-                >
-                  ૧૫/૧૦ (3)
-                </button>
-                <button
-                  onClick={() => {
-                    setCurrentMonth(9);
-                    setCurrentYear(2026);
                     setSelectedDayKey('2026-10-20');
                   }}
-                  className="px-2.5 py-1 rounded-lg bg-orange-100 text-orange-900 hover:bg-orange-200"
+                  className="px-2.5 py-1 rounded-lg bg-orange-100 text-orange-900 hover:bg-orange-200 cursor-pointer"
                 >
                   ૨૦/૧૦ (2)
                 </button>
                 <button
+                  type="button"
                   onClick={() => {
                     setCurrentMonth(9);
                     setCurrentYear(2026);
                     setSelectedDayKey('2026-10-23');
                   }}
-                  className="px-2.5 py-1 rounded-lg bg-blue-100 text-blue-900 hover:bg-blue-200"
+                  className="px-2.5 py-1 rounded-lg bg-blue-100 text-blue-900 hover:bg-blue-200 cursor-pointer"
                 >
                   ૨૩/૧૦ (2)
                 </button>
@@ -520,21 +681,44 @@ export const HearingCalendarView: React.FC<HearingCalendarViewProps> = ({
                   <Clock className="w-5 h-5 stroke-[2.5]" />
                 </span>
                 <div>
-                  <h3 className="text-base sm:text-lg font-black tracking-tight text-white">
-                    {selectedDayKey 
-                      ? `તા. ${allHearings.find(h => h.dayKey === selectedDayKey)?.rawDate || selectedDayKey} ના રોજનું કોર્ટ બોર્ડ` 
-                      : 'તમામ સુનાવણીઓની યાદી'}
-                  </h3>
-                  <p className="text-xs text-blue-100 font-semibold">
-                    કોર્ટમાં હાજરી આપવા માટેની સંપૂર્ણ દૈનિક યાદી
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-base sm:text-lg font-black tracking-tight text-white">
+                      {selectedDayKey === todayDayKey
+                        ? `📍 આજની તારીખનું કોર્ટ બોર્ડ (${todayShortDate})`
+                        : selectedDayKey 
+                        ? `તા. ${allHearings.find(h => h.dayKey === selectedDayKey)?.rawDate || selectedDayKey} ના રોજનું કોર્ટ બોર્ડ` 
+                        : 'તમામ સુનાવણીઓની યાદી'}
+                    </h3>
+                    {selectedDayKey === todayDayKey && (
+                      <span style={{ backgroundColor: '#22c55e', color: '#ffffff' }} className="text-[10px] font-black px-2 py-0.5 rounded-full uppercase shadow-xs">
+                        આજનું લાઈવ બોર્ડ
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-blue-100 font-semibold mt-0.5">
+                    {selectedDayKey === todayDayKey ? todayFormattedGujarati : 'કોર્ટમાં હાજરી આપવા માટેની સંપૂર્ણ દૈનિક યાદી'}
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
+                {selectedDayKey !== todayDayKey && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentMonth(todayMonth);
+                      setCurrentYear(todayYear);
+                      setSelectedDayKey(todayDayKey);
+                    }}
+                    style={{ backgroundColor: '#22c55e', color: '#ffffff' }}
+                    className="px-3 py-1.5 rounded-xl text-xs font-black shadow-md hover:bg-emerald-600 active:scale-95 transition-all flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>🎯 આજનું બોર્ડ જુઓ</span>
+                  </button>
+                )}
                 <span 
                   style={{ backgroundColor: '#fef08a', color: '#713f12' }}
-                  className="text-xs font-black px-3 py-1 rounded-full shadow-md font-mono"
+                  className="text-xs font-black px-3 py-1.5 rounded-full shadow-md font-mono"
                 >
                   {activeHearings.length} કેસો
                 </span>
@@ -576,12 +760,27 @@ export const HearingCalendarView: React.FC<HearingCalendarViewProps> = ({
             {/* Hearings List */}
             <div className="p-4 sm:p-5 max-h-[620px] overflow-y-auto space-y-3.5 scrollbar-thin">
               {activeHearings.length === 0 ? (
-                <div className="p-10 text-center text-slate-500 bg-amber-50/40 rounded-2xl border border-dashed border-amber-300">
-                  <CalendarIcon className="w-12 h-12 mx-auto mb-2 text-amber-500" />
-                  <p className="text-base font-bold text-slate-800">પસંદ કરેલ તારીખે કોઈ મુદત નથી</p>
-                  <p className="text-xs text-slate-500 mt-1">
-                    ડાબી બાજુના કેલેન્ડરમાં હાઇલાઇટ થયેલી તારીખ પર ક્લિક કરો અથવા "બધી મુદતો" બટન દબાવો
+                <div className="p-8 sm:p-10 text-center text-slate-500 bg-amber-50/50 rounded-2xl border-2 border-dashed border-amber-300 space-y-2.5">
+                  <CalendarIcon className="w-12 h-12 mx-auto text-amber-500" />
+                  <p className="text-base font-black text-slate-800">
+                    {selectedDayKey === todayDayKey
+                      ? `આજે (${todayFormattedGujarati}) કોઈ કેસની સુનાવણી નથી`
+                      : 'પસંદ કરેલ તારીખે કોઈ મુદત નથી'}
                   </p>
+                  <p className="text-xs text-slate-600 font-medium">
+                    {selectedDayKey === todayDayKey
+                      ? 'આગામી તારીખની મુદતો જોવા માટે ડાબી બાજુ કેલેન્ડરમાં હાઇલાઇટ થયેલી તારીખ પર ક્લિક કરો અથવા "બધી મુદતો" બટન દબાવો.'
+                      : 'ડાબી બાજુના કેલેન્ડરમાં હાઇલાઇટ થયેલી તારીખ પર ક્લિક કરો અથવા "બધી મુદતો" બટન દબાવો.'}
+                  </p>
+                  <div className="pt-2 flex justify-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDayKey(null)}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black shadow-xs cursor-pointer"
+                    >
+                      તમામ મુદતો જુઓ ({allHearings.length})
+                    </button>
+                  </div>
                 </div>
               ) : (
                 activeHearings.map((item, idx) => {
