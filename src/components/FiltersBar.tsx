@@ -5,7 +5,7 @@ interface FiltersBarProps {
   filter: CaseFilter;
   onFilterChange: (newFilter: CaseFilter) => void;
   advocateOptions: string[];
-  courtOptions: string[];
+  courtOptions?: string[];
   viewMode: 'table' | 'cards';
   onViewModeChange: (mode: 'table' | 'cards') => void;
   filteredCount: number;
@@ -212,22 +212,7 @@ export const FiltersBar: React.FC<FiltersBarProps> = ({
             ))}
           </select>
 
-          {/* Court Dropdown */}
-          {courtOptions.length > 0 && (
-            <select
-              value={filter.court}
-              onChange={(e) => onFilterChange({ ...filter, court: e.target.value })}
-              style={{ backgroundColor: '#ecfdf5', border: '1.5px solid #6ee7b7', color: '#065f46' }}
-              className="px-3 py-1.5 rounded-xl font-bold focus:ring-2 focus:ring-emerald-500 cursor-pointer shadow-2xs"
-            >
-              <option value="">🏛️ તમામ કોર્ટ સ્થળ ({courtOptions.join(', ')})</option>
-              {courtOptions.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          )}
+
 
           {/* Status Type Dropdown */}
           <select
