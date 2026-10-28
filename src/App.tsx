@@ -399,6 +399,42 @@ export default function App() {
     return result;
   }, [data, activeSheet, filter, employeeProfiles]);
 
+  // Count ST vs Employee petitioners in the active view
+  const petitionerCounts = useMemo(() => {
+    let total = 0;
+    let st = 0;
+    let employee = 0;
+
+    const countRow = (sKey: SheetKey, row: string[], idx: number) => {
+      if (!row || !isValidCaseRow(row) || isHeaderRow(row)) return;
+      const isHC = sKey === 'HC CASE';
+      const empCol = isHC ? 5 : 4;
+      const partyText = row[empCol] || '';
+      const caseKey = getCaseKey(sKey, row, idx);
+      const profile = employeeProfiles[caseKey];
+      const pType = getPetitionerType(partyText, profile);
+      total++;
+      if (pType === 'st') st++;
+      else employee++;
+    };
+
+    if (activeSheet === 'TOTAL') {
+      (['HC CASE', 'LABOUR CASE', 'IT CASE'] as SheetKey[]).forEach((sKey) => {
+        const rows = data[sKey] || [];
+        for (let i = 2; i < rows.length; i++) {
+          countRow(sKey, rows[i], i);
+        }
+      });
+    } else if (activeSheet === 'HC CASE' || activeSheet === 'LABOUR CASE' || activeSheet === 'IT CASE') {
+      const rows = data[activeSheet] || [];
+      for (let i = 2; i < rows.length; i++) {
+        countRow(activeSheet, rows[i], i);
+      }
+    }
+
+    return { total, st, employee };
+  }, [data, activeSheet, employeeProfiles]);
+
   // Cell Change Handler (Only permitted for Admin)
   const handleCellChange = (originalIndex: number, colIndex: number, newValue: string, rowSheetKey?: SheetKey) => {
     if (!isAdmin) {
@@ -965,6 +1001,7 @@ export default function App() {
       return updated;
     });
 
+    setIsExcelUploadModalOpen(false);
     setSelectedRowIndex(null);
     showToast(
       mode === 'replace'
@@ -1195,6 +1232,8 @@ export default function App() {
               onViewModeChange={setViewMode}
               filteredCount={currentSheetRows.length}
               totalInCurrentSheet={activeSheet === 'TOTAL' ? stats.total : (data[activeSheet]?.length ? data[activeSheet].length - 2 : 0)}
+              petitionerCounts={petitionerCounts}
+              activeSheet={activeSheet}
               onExportDossier={() => handleExportExcel('dossier')}
             />
 

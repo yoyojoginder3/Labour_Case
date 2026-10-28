@@ -253,6 +253,11 @@ export const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
     }
 
     onConfirmImport(rawWorkbookData, importMode);
+    setSelectedFile(null);
+    setParsedSheets([]);
+    setRawWorkbookData(null);
+    setErrorMsg('');
+    onClose();
   };
 
   const totalCasesDetected = parsedSheets.reduce((sum, s) => sum + s.rowCount, 0);

@@ -1,5 +1,4 @@
-import React from 'react';
-import { Search, X, LayoutGrid, TableProperties, RotateCcw, Filter, Sparkles, Check, FileSpreadsheet, UserCheck } from 'lucide-react';
+import { Search, X, LayoutGrid, TableProperties, RotateCcw, Filter, Sparkles, Check, FileSpreadsheet, UserCheck, Building2, User, Users, Scale } from 'lucide-react';
 import { CaseFilter } from '../types/case';
 
 interface FiltersBarProps {
@@ -11,6 +10,8 @@ interface FiltersBarProps {
   onViewModeChange: (mode: 'table' | 'cards') => void;
   filteredCount: number;
   totalInCurrentSheet: number;
+  petitionerCounts?: { total: number; st: number; employee: number };
+  activeSheet?: string;
   onExportDossier?: () => void;
 }
 
@@ -23,6 +24,8 @@ export const FiltersBar: React.FC<FiltersBarProps> = ({
   onViewModeChange,
   filteredCount,
   totalInCurrentSheet,
+  petitionerCounts,
+  activeSheet,
   onExportDossier
 }) => {
   const isFiltered =
@@ -186,6 +189,83 @@ export const FiltersBar: React.FC<FiltersBarProps> = ({
             </button>
           );
         })}
+      </div>
+
+      {/* High Court & All Courts: Petitioner Type Quick Filter Bar (પ્રથમ પક્ષકાર: એસ.ટી. નિગમ vs કર્મચારી) */}
+      <div 
+        style={{
+          background: 'linear-gradient(90deg, #f8fafc 0%, #f1f5f9 100%)',
+          border: '1.5px solid #cbd5e1'
+        }}
+        className="p-2.5 sm:p-3 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-2.5 shadow-xs"
+      >
+        <div className="flex items-center gap-2">
+          <div 
+            style={{ backgroundColor: '#1d4ed8', color: '#ffffff' }}
+            className="w-7 h-7 rounded-lg flex items-center justify-center font-black shadow-xs shrink-0"
+          >
+            <Scale className="w-4 h-4 text-amber-300" />
+          </div>
+          <div>
+            <div className="text-xs font-black text-slate-900 flex items-center gap-1.5">
+              <span>પ્રથમ પક્ષકાર / પિટિશનર ફિલ્ટર</span>
+              {activeSheet === 'HC CASE' && (
+                <span className="text-[10px] font-black px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-800 border border-blue-300">
+                  હાઈકોર્ટ કેસ વિશેષ
+                </span>
+              )}
+            </div>
+            <div className="text-[11px] text-slate-500 font-semibold">
+              કેસ કોણે દાખલ કર્યો છે તે મુજબ અલગ યાદી જુઓ:
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <button
+            type="button"
+            onClick={() => onFilterChange({ ...filter, petitionerType: 'all' })}
+            style={{
+              backgroundColor: (!filter.petitionerType || filter.petitionerType === 'all') ? '#0f172a' : '#ffffff',
+              color: (!filter.petitionerType || filter.petitionerType === 'all') ? '#fde047' : '#334155',
+              border: '2px solid ' + ((!filter.petitionerType || filter.petitionerType === 'all') ? '#0f172a' : '#cbd5e1')
+            }}
+            className="px-3 py-1.5 rounded-xl font-black text-xs transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap active:scale-95"
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span>તમામ કેસો ({petitionerCounts?.total ?? totalInCurrentSheet})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onFilterChange({ ...filter, petitionerType: 'st' })}
+            style={{
+              backgroundColor: filter.petitionerType === 'st' ? '#1d4ed8' : '#ffffff',
+              color: filter.petitionerType === 'st' ? '#ffffff' : '#1e40af',
+              border: '2px solid #2563eb'
+            }}
+            className="px-3 py-1.5 rounded-xl font-black text-xs transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer hover:bg-blue-50 whitespace-nowrap active:scale-95"
+            title="પ્રથમ પક્ષકાર એસ.ટી. નિગમ હોય તેવા કેસો (એસ.ટી. દ્વારા દાખલ)"
+          >
+            <Building2 className="w-3.5 h-3.5 text-amber-300" />
+            <span>🚌 પ્રથમ પક્ષકાર: એસ.ટી. નિગમ ({petitionerCounts?.st ?? 0})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onFilterChange({ ...filter, petitionerType: 'employee' })}
+            style={{
+              backgroundColor: filter.petitionerType === 'employee' ? '#059669' : '#ffffff',
+              color: filter.petitionerType === 'employee' ? '#ffffff' : '#065f46',
+              border: '2px solid #059669'
+            }}
+            className="px-3 py-1.5 rounded-xl font-black text-xs transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer hover:bg-emerald-50 whitespace-nowrap active:scale-95"
+            title="કર્મચારી દ્વારા દાખલ થયેલ કેસો (પ્રથમ પક્ષકાર: કર્મચારી)"
+          >
+            <User className="w-3.5 h-3.5" />
+            <span>🧑‍💼 પ્રથમ પક્ષકાર: કર્મચારી દ્વારા દાખલ ({petitionerCounts?.employee ?? 0})</span>
+          </button>
+        </div>
       </div>
 
       {/* Secondary Dropdown Filter Strip */}

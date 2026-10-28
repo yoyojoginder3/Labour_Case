@@ -322,10 +322,28 @@ export function getCaseKey(sheetKey: string, row: string[], index?: number): str
 export function getPetitionerType(partyText: string, profile?: EmployeeProfile): 'employee' | 'st' {
   if (profile?.petitionerType) return profile.petitionerType;
   if (!partyText) return 'employee';
-  // Check if ST/GSRTC is listed as the Applicant / Petitioner
-  if (/અરજદાર[:ઃ-]?\s*(એસ\.?ટી|નિગમ|GSRTC|સંસ્થા|ગુજરાત)/i.test(partyText)) {
+
+  const clean = partyText.trim();
+
+  // 1. Check if ST/GSRTC is listed as Applicant / Petitioner / First Party
+  // Examples: "અરજદારઃ-એસ.ટી.સંસ્થા", "અરજદાર: એસ.ટી.", "અરજદાર:- GSRTC", "પિટિશનર: નિગમ"
+  if (
+    /અરજદાર[:ઃ-]?\s*(એસ\.?ટી|નિગમ|GSRTC|સંસ્થા|ગુજરાત\s*રાજ્ય|ડિવિઝનલ|વિભાગીય)/i.test(clean) ||
+    /^(એસ\.?ટી|નિગમ|GSRTC|ગુજરાત\s*રાજ્ય\s*માર્ગ)/i.test(clean)
+  ) {
     return 'st';
   }
+
+  // 2. If ST appears before "વિરુદ્ધ" or "vs"
+  if (/(એસ\.?ટી|નિગમ|GSRTC).*(વિરુદ્ધ|વિ\.|vs|v\/s)/i.test(clean)) {
+    return 'st';
+  }
+
+  // 3. If "સામાવાળા" is ST/GSRTC, then the Applicant/Petitioner is the employee
+  if (/સામાવાળા[:ઃ-]?\s*(એસ\.?ટી|નિગમ|GSRTC|સંસ્થા)/i.test(clean)) {
+    return 'employee';
+  }
+
   return 'employee';
 }
 
