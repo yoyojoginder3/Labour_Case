@@ -229,17 +229,17 @@ export const FiltersBar: React.FC<FiltersBarProps> = ({
             <option value="disposed">✅ નિકાલ થયેલ (Disposed)</option>
           </select>
 
-          {/* Petitioner Type (કેસ કોણે કર્યો) Dropdown */}
+          {/* Petitioner Type (પ્રથમ પક્ષકાર મુજબ: ST નિગમ કે કર્મચારી) Dropdown */}
           <select
             value={filter.petitionerType || 'all'}
             onChange={(e) => onFilterChange({ ...filter, petitionerType: e.target.value as any })}
             style={{ backgroundColor: '#eff6ff', border: '1.5px solid #60a5fa', color: '#1e40af' }}
             className="px-3 py-1.5 rounded-xl font-bold focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-2xs"
-            title="કેસ કોણે દાખલ કર્યો છે તે મુજબ ફિલ્ટર કરો (કર્મચારી અથવા એસ.ટી. નિગમ)"
+            title="પ્રથમ પક્ષકાર મુજબ કેસ ફિલ્ટર કરો (ST નિગમ દ્વારા દાખલ કેસ અથવા કર્મચારી દ્વારા દાખલ કેસ)"
           >
-            <option value="all">👥 તમામ પક્ષકારો (કર્મચારી + એસ.ટી.)</option>
-            <option value="employee">🧑‍💼 કર્મચારી દ્વારા દાખલ (By Workman)</option>
-            <option value="st">🚌 એસ.ટી. નિગમ દ્વારા દાખલ (By GSRTC)</option>
+            <option value="all">👥 તમામ પક્ષકારો ({petitionerCounts?.total ?? totalInCurrentSheet})</option>
+            <option value="st">🚌 ST નિગમ દ્વારા દાખલ કેસ ({petitionerCounts?.st ?? 0})</option>
+            <option value="employee">🧑‍💼 કર્મચારી દ્વારા દાખલ કેસ ({petitionerCounts?.employee ?? 0})</option>
           </select>
         </div>
 

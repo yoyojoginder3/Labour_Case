@@ -1,6 +1,6 @@
 import React from 'react';
 import { SheetKey, EmployeeProfileMap } from '../types/case';
-import { getStatusCategory, extractDateFromStatus, getCaseKey } from '../data/initialData';
+import { getStatusCategory, extractDateFromStatus, getCaseKey, getPetitionerType } from '../data/initialData';
 import { Eye, Trash2, Calendar, FileText, User, Archive, Lock, Briefcase, Award, Landmark, Scale, Gavel, Layers } from 'lucide-react';
 
 interface TableViewProps {
@@ -58,7 +58,7 @@ export const TableView: React.FC<TableViewProps> = ({
 
   const employeeColIndex = React.useMemo(() => {
     const idx = headers.findIndex((h) => 
-      h.includes('કર્મચારી') || h.includes('કામદાર') || h.includes('અરજદાર') || h.includes('પાર્ટી')
+      h.includes('કર્મચારી') || h.includes('કામદાર') || h.includes('અરજદાર') || h.includes('પાર્ટી') || h.includes('પક્ષકાર')
     );
     return idx !== -1 ? idx : (sheetKey === 'HC CASE' ? 5 : 4);
   }, [headers, sheetKey]);
@@ -237,9 +237,21 @@ export const TableView: React.FC<TableViewProps> = ({
                                 );
 
                                 const empName = profile?.employeeName || (() => {
-                                  if (val.includes('અરજદારઃ-')) {
-                                    const raw = val.split('અરજદારઃ-')[1] || '';
-                                    return raw.split('(')[0].replace(/સામાવાળા.*/, '').trim();
+                                  const isST = getPetitionerType(val, profile) === 'st';
+                                  if (isST) {
+                                    const rawOpp = val.split(/સામાવાળા[\s:ઃ\.-]*/)[1] || '';
+                                    if (rawOpp) {
+                                      return rawOpp.split('(')[0].replace(/^[\s:ઃ\.-]+/, '').trim() || val.split('\n')[0];
+                                    }
+                                    const oppCol = headers.findIndex(h => /સામાવાળા|બીજા\s*પક્ષકાર|દ્વિતીય|opponent|respondent/i.test(h));
+                                    if (oppCol >= 0 && rowData[oppCol]) {
+                                      return rowData[oppCol].split('(')[0].replace(/^[\s:ઃ\.-]+/, '').trim();
+                                    }
+                                    return val.split('\n')[0] || val;
+                                  }
+                                  if (val.includes('અરજદાર')) {
+                                    const raw = val.split(/અરજદાર[\s:ઃ\.-]*/)[1] || '';
+                                    return raw.split('(')[0].replace(/સામાવાળા.*/, '').replace(/^[\s:ઃ\.-]+/, '').trim() || val.split('\n')[0];
                                   }
                                   return val.split('\n')[0] || val;
                                 })();

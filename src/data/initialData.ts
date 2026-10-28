@@ -311,6 +311,8 @@ export interface DetectedColumns {
   statusCol: number;
   dateCol: number;
   lowerCourtCol: number;
+  firstPartyCol: number;
+  secondPartyCol: number;
 }
 
 /**
@@ -327,6 +329,8 @@ export function detectSheetColumns(headers: string[] | undefined, sheetKey?: She
     lowerCourtCol: isHC ? 2 : -1,
     advCol: isHC ? 4 : 3,
     empCol: isHC ? 5 : 4,
+    firstPartyCol: -1,
+    secondPartyCol: -1,
     courtCol: isHC ? -1 : 2,
     summaryCol: isHC ? 6 : 5,
     statusCol: isHC ? 10 : 6,
@@ -334,6 +338,7 @@ export function detectSheetColumns(headers: string[] | undefined, sheetKey?: She
   };
 
   if (!headers || !Array.isArray(headers) || headers.length === 0) {
+    result.firstPartyCol = result.empCol;
     return result;
   }
 
@@ -341,6 +346,16 @@ export function detectSheetColumns(headers: string[] | undefined, sheetKey?: She
   headers.forEach((h, idx) => {
     if (!h || typeof h !== 'string') return;
     const clean = h.replace(/\n/g, ' ').toLowerCase().trim();
+
+    // Specific First Party column detection (પ્રથમ પક્ષકાર / First Party)
+    if (/પ્રથમ\s*પક્ષકાર|first\s*party|પક્ષકાર\s*[-_]?\s*[૧1]|પાર્ટી\s*[-_]?\s*[૧1]/i.test(clean)) {
+      result.firstPartyCol = idx;
+    }
+
+    // Specific Second Party / Opposite party column detection (બીજા પક્ષકાર / સામાવાળા)
+    if (/બીજા\s*પક્ષકાર|દ્વિતીય\s*પક્ષકાર|second\s*party|પક્ષકાર\s*[-_]?\s*[૨2]|પાર્ટી\s*[-_]?\s*[૨2]|સામાવાળા|opponent|respondent/i.test(clean)) {
+      result.secondPartyCol = idx;
+    }
 
     if (/સ્ટેટસ|status|પરિસ્થિતી|સ્થિતિ|હાલની|છેલ્લામાં/i.test(clean)) {
       result.statusCol = idx;
@@ -370,6 +385,11 @@ export function detectSheetColumns(headers: string[] | undefined, sheetKey?: She
       result.lowerCourtCol = idx;
     }
   });
+
+  // If no explicit "પ્રથમ પક્ષકાર" column was detected, fallback to empCol / applicant column
+  if (result.firstPartyCol === -1) {
+    result.firstPartyCol = result.empCol;
+  }
 
   return result;
 }
@@ -506,28 +526,55 @@ export function getPetitionerType(partyText: string, profile?: EmployeeProfile):
   if (profile?.petitionerType) return profile.petitionerType;
   if (!partyText) return 'employee';
 
-  const clean = partyText.trim();
+  const clean = partyText.replace(/\r?\n/g, ' ').trim();
+  if (!clean || clean === '-' || clean === '--') return 'employee';
 
-  // 1. Check if ST/GSRTC is listed as Applicant / Petitioner / First Party
-  // Examples: "અરજદારઃ-એસ.ટી.સંસ્થા", "અરજદાર: એસ.ટી.", "અરજદાર:- GSRTC", "પિટિશનર: નિગમ"
-  if (
-    /અરજદાર[:ઃ-]?\s*(એસ\.?ટી|નિગમ|GSRTC|સંસ્થા|ગુજરાત\s*રાજ્ય|ડિવિઝનલ|વિભાગીય)/i.test(clean) ||
-    /^(એસ\.?ટી|નિગમ|GSRTC|ગુજરાત\s*રાજ્ય\s*માર્ગ)/i.test(clean)
-  ) {
+  // Split into First Party (પ્રથમ પક્ષકાર / અરજદાર / Applicant / Petitioner) and Opposite Party (સામાવાળા / Respondent / Opponent)
+  const splitOpponent = clean.split(/સામાવાળા|વિરુદ્ધ|વિ\.|vs|v\/s|opponent|respondent/i);
+  const firstParty = splitOpponent[0].trim();
+  const secondParty = splitOpponent.length > 1 ? splitOpponent.slice(1).join(' ').trim() : '';
+
+  // Comprehensive Regex to detect ST / GSRTC / Nigam / Sanstha / Divisional Controller
+  const stRegex = /(એસ\.?\s*ટી|નિગમ|gsrtc|સંસ્થા|ગુજરાત\s*રાજ્ય|ગ\.?રા\.?મા\.?વા|ડિવિઝનલ|વિભાગીય|\bst\b)/i;
+
+  // 1. If First Party (પ્રથમ પક્ષકાર / અરજદાર) mentions ST / GSRTC -> ST Nigam dwara dakhal case
+  if (stRegex.test(firstParty)) {
     return 'st';
   }
 
-  // 2. If ST appears before "વિરુદ્ધ" or "vs"
-  if (/(એસ\.?ટી|નિગમ|GSRTC).*(વિરુદ્ધ|વિ\.|vs|v\/s)/i.test(clean)) {
-    return 'st';
-  }
-
-  // 3. If "સામાવાળા" is ST/GSRTC, then the Applicant/Petitioner is the employee
-  if (/સામાવાળા[:ઃ-]?\s*(એસ\.?ટી|નિગમ|GSRTC|સંસ્થા)/i.test(clean)) {
+  // 2. If Second Party (સામાવાળા) mentions ST / GSRTC -> First Party is Employee
+  if (stRegex.test(secondParty)) {
     return 'employee';
   }
 
+  // 3. Check explicit profile override if present
+  if (profile?.petitionerType) {
+    return profile.petitionerType;
+  }
+
+  // 4. Default: Employee
   return 'employee';
+}
+
+/** Helper to extract petitioner classification directly from a row using detected columns */
+export function extractRowPetitionerType(
+  row: string[],
+  cols: DetectedColumns,
+  profile?: EmployeeProfile
+): 'employee' | 'st' {
+  if (profile?.petitionerType) return profile.petitionerType;
+  if (!row || row.length === 0) return 'employee';
+
+  const firstCol = (cols.firstPartyCol !== undefined && cols.firstPartyCol >= 0) ? cols.firstPartyCol : cols.empCol;
+  let partyText = (row[firstCol] || '').trim();
+  if (!partyText && cols.empCol >= 0) {
+    partyText = (row[cols.empCol] || '').trim();
+  }
+  if (cols.secondPartyCol !== undefined && cols.secondPartyCol >= 0 && row[cols.secondPartyCol]) {
+    partyText = `${partyText} સામાવાળા ${row[cols.secondPartyCol]}`;
+  }
+
+  return getPetitionerType(partyText, profile);
 }
 
 /** Extract or pre-populate initial employee profile from case row */
@@ -547,20 +594,20 @@ export function extractInitialProfileFromRow(sheetKey: string, row: string[]): E
   let designation = '';
 
   if (isSTPetitioner) {
-    // When ST/GSRTC is Applicant, Employee is Respondent (સામાવાળા)
-    const afterOpp = empText.split(/સામાવાળા[:ઃ-]?/)[1] || '';
-    const cleanOpp = afterOpp.split('[')[0].trim();
+    // When ST/GSRTC is Applicant (First Party), Employee is Respondent (સામાવાળા)
+    const afterOpp = empText.split(/સામાવાળા[\s:ઃ\.-]*/)[1] || '';
+    const cleanOpp = afterOpp.split('[')[0].replace(/^[\s:ઃ\.-]+/, '').trim();
     if (cleanOpp.includes('(')) {
       employeeName = cleanOpp.split('(')[0].trim();
       designation = cleanOpp.split('(')[1]?.split(')')[0]?.trim() || '';
     } else {
       employeeName = cleanOpp;
     }
-  } else if (empText.includes('અરજદારઃ-') || empText.includes('અરજદાર:')) {
+  } else if (empText.includes('અરજદાર')) {
     // When Employee is Applicant (અરજદાર)
-    const after = empText.split(/અરજદાર[:ઃ-]?/)[1] || '';
-    const beforeOpp = after.split(/સામાવાળા[:ઃ-]?/)[0] || '';
-    const cleanApp = beforeOpp.split('[')[0].trim();
+    const after = empText.split(/અરજદાર[\s:ઃ\.-]*/)[1] || '';
+    const beforeOpp = after.split(/સામાવાળા|વિરુદ્ધ/)[0] || '';
+    const cleanApp = beforeOpp.split('[')[0].replace(/^[\s:ઃ\.-]+/, '').trim();
     if (cleanApp.includes('(')) {
       employeeName = cleanApp.split('(')[0].trim();
       designation = cleanApp.split('(')[1]?.split(')')[0]?.trim() || '';

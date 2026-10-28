@@ -15,7 +15,8 @@ import {
   normalizeAdvocateName,
   getCaseKey,
   extractInitialProfileFromRow,
-  getPetitionerType
+  getPetitionerType,
+  extractRowPetitionerType
 } from './data/initialData';
 import { Header } from './components/Header';
 import { FiltersBar } from './components/FiltersBar';
@@ -347,10 +348,9 @@ export default function App() {
           }
 
           if (filter.petitionerType && filter.petitionerType !== 'all') {
-            const partyText = emp;
             const caseKey = getCaseKey(sKey, row, i);
             const profile = employeeProfiles[caseKey];
-            const pType = getPetitionerType(partyText, profile);
+            const pType = extractRowPetitionerType(row, cols, profile);
             if (pType !== filter.petitionerType) continue;
           }
 
@@ -413,10 +413,9 @@ export default function App() {
       }
 
       if (filter.petitionerType && filter.petitionerType !== 'all') {
-        const partyText = row[cols.empCol] || '';
         const caseKey = getCaseKey(activeSheet, row, i);
         const profile = employeeProfiles[caseKey];
-        const pType = getPetitionerType(partyText, profile);
+        const pType = extractRowPetitionerType(row, cols, profile);
         if (pType !== filter.petitionerType) continue;
       }
 
@@ -435,10 +434,9 @@ export default function App() {
     const countRow = (sKey: SheetKey, row: string[], idx: number) => {
       if (!row || !isValidCaseRow(row) || isHeaderRow(row)) return;
       const cols = detectSheetColumns(data[sKey]?.[1], sKey);
-      const partyText = row[cols.empCol] || '';
       const caseKey = getCaseKey(sKey, row, idx);
       const profile = employeeProfiles[caseKey];
-      const pType = getPetitionerType(partyText, profile);
+      const pType = extractRowPetitionerType(row, cols, profile);
       total++;
       if (pType === 'st') st++;
       else employee++;
