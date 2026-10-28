@@ -1,6 +1,6 @@
 import React from 'react';
 import { SheetKey, EmployeeProfileMap } from '../types/case';
-import { getStatusCategory, extractDateFromStatus, getCaseKey, getPetitionerType } from '../data/initialData';
+import { getStatusCategory, extractDateFromStatus, getCaseKey } from '../data/initialData';
 import { Eye, Trash2, Calendar, FileText, User, Archive, Lock, Briefcase, Award, Landmark, Scale, Gavel, Layers } from 'lucide-react';
 
 interface TableViewProps {
@@ -261,31 +261,8 @@ export const TableView: React.FC<TableViewProps> = ({
                                   line !== empName && line !== des && !line.startsWith('અરજદારઃ-')
                                 ).join('\n');
 
-                                const pType = getPetitionerType(val, profile);
-
                                 return (
                                   <>
-                                    {/* ૦. પ્રથમ પક્ષકાર (ST vs Employee) Badge */}
-                                    <div className="pb-0.5">
-                                      {pType === 'st' ? (
-                                        <span 
-                                          style={{ backgroundColor: '#eff6ff', color: '#1e40af', border: '1px solid #93c5fd' }}
-                                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-black shadow-2xs"
-                                          title="આ કેસમાં પ્રથમ પક્ષકાર એસ.ટી. નિગમ છે"
-                                        >
-                                          <span>🚌 પ્રથમ પક્ષકાર: એસ.ટી. નિગમ</span>
-                                        </span>
-                                      ) : (
-                                        <span 
-                                          style={{ backgroundColor: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0' }}
-                                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-black shadow-2xs"
-                                          title="આ કેસ કર્મચારી દ્વારા દાખલ થયેલ છે"
-                                        >
-                                          <span>🧑‍💼 પ્રથમ પક્ષકાર: કર્મચારી દ્વારા દાખલ</span>
-                                        </span>
-                                      )}
-                                    </div>
-
                                     {/* ૧. કર્મચારીનું નામ (Employee Name) */}
                                     <div className="font-black text-slate-950 text-xs sm:text-[13px] flex items-center gap-1.5 leading-snug">
                                       <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center shrink-0 border border-emerald-300">

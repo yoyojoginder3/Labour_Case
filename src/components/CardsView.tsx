@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { SheetKey, EmployeeProfileMap } from '../types/case';
-import { getStatusCategory, extractDateFromStatus, getCaseKey, getPetitionerType } from '../data/initialData';
+import { getStatusCategory, extractDateFromStatus, getCaseKey } from '../data/initialData';
 import { Calendar, User, Eye, Trash2, Copy, Check, FileText, ArrowRight, Briefcase, Award } from 'lucide-react';
 
 interface CardsViewProps {
@@ -171,22 +171,6 @@ export const CardsView: React.FC<CardsViewProps> = ({
                     <User className="w-3.5 h-3.5" />
                     <span>{advocate || 'અનિર્ણિત એડવોકેટ'}</span>
                   </span>
-                  {(() => {
-                    const caseKey = getCaseKey(sheetKey, rowData, originalIndex);
-                    const profile = employeeProfiles?.[caseKey] || Object.values(employeeProfiles || {}).find(p => 
-                      (p.employeeName && applicant.includes(p.employeeName)) || (p.pfNo && applicant.includes(p.pfNo))
-                    );
-                    const pType = getPetitionerType(applicant, profile);
-                    return pType === 'st' ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-black bg-blue-100 text-blue-900 border border-blue-300">
-                        <span>🚌 પ્રથમ પક્ષકાર: એસ.ટી.</span>
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-black bg-emerald-100 text-emerald-900 border border-emerald-300">
-                        <span>🧑‍💼 પ્રથમ પક્ષકાર: કર્મચારી</span>
-                      </span>
-                    );
-                  })()}
                 </div>
 
                 <div className="text-slate-800 bg-emerald-50/80 p-2.5 rounded-xl border border-emerald-200 leading-snug space-y-1">
