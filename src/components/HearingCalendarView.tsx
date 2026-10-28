@@ -1,6 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { SheetDataMap, SheetKey } from '../types/case';
-import { extractDateFromStatus, getStatusCategory } from '../data/initialData';
+import { 
+  extractDateFromStatus, 
+  extractDateFromRow, 
+  detectSheetColumns, 
+  getStatusCategory,
+  gujaratiToEnglishDigits
+} from '../data/initialData';
 import { 
   Calendar as CalendarIcon, 
   ChevronLeft, 
@@ -39,21 +45,31 @@ interface HearingCalendarViewProps {
   onSelectCase: (sheetKey: SheetKey, originalIndex: number) => void;
 }
 
-// Helper to parse date strings like "20/10/2026", "20-10-2026", "08-10-2021"
+// Helper to parse date strings (e.g. "20/10/2026", "2026-10-20", "૨૧/૦૯/૨૦૨૬", "08-10-2021")
 function parseHearingDate(dateStr: string): { parsed: Date | null; dayKey: string } {
   if (!dateStr) return { parsed: null, dayKey: '' };
   
-  // Replace - with /
-  const clean = dateStr.replace(/-/g, '/').trim();
+  const clean = gujaratiToEnglishDigits(dateStr).replace(/[-.]/g, '/').trim();
   const parts = clean.split('/');
   if (parts.length === 3) {
-    let day = parseInt(parts[0], 10);
-    let month = parseInt(parts[1], 10) - 1; // 0-indexed
-    let year = parseInt(parts[2], 10);
-    if (year < 100) year += 2000;
+    let day = 0;
+    let month = 0;
+    let year = 0;
+
+    // Check if ISO format YYYY/MM/DD
+    if (parts[0].length === 4) {
+      year = parseInt(parts[0], 10);
+      month = parseInt(parts[1], 10) - 1;
+      day = parseInt(parts[2], 10);
+    } else {
+      day = parseInt(parts[0], 10);
+      month = parseInt(parts[1], 10) - 1; // 0-indexed
+      year = parseInt(parts[2], 10);
+      if (year < 100) year += 2000;
+    }
     
     // Check validity
-    if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+    if (!isNaN(day) && !isNaN(month) && !isNaN(year) && day >= 1 && day <= 31 && month >= 0 && month <= 11) {
       const d = new Date(year, month, day);
       const dayKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       return { parsed: d, dayKey };
@@ -101,24 +117,37 @@ export const HearingCalendarView: React.FC<HearingCalendarViewProps> = ({
 
     // 1. High Court Cases
     const hcRows = data['HC CASE'] || [];
+    const hcCols = detectSheetColumns(hcRows[1], 'HC CASE');
     for (let i = 2; i < hcRows.length; i++) {
       const row = hcRows[i];
-      if (!row || !row.some(c => c.trim())) continue;
+      if (!row || !row.some(c => c && c.trim())) continue;
 
-      const status = row[10] || '';
-      const dateStr = extractDateFromStatus(status);
+      const status = (row[hcCols.statusCol] || row[row.length - 1] || '').trim();
+      const dateStr = extractDateFromStatus(status) || extractDateFromRow(row, hcCols.statusCol);
       if (dateStr) {
         const { parsed, dayKey } = parseHearingDate(dateStr);
+        let caseNo = (row[hcCols.caseNoCol] || '').trim();
+        if (!caseNo) {
+          // Look for case number pattern in first few columns
+          for (let c = 1; c <= Math.min(row.length - 1, 4); c++) {
+            if (row[c] && /\d+/.test(row[c])) {
+              caseNo = row[c].trim();
+              break;
+            }
+          }
+        }
+        if (!caseNo) caseNo = row[1] || 'SCA';
+
         list.push({
           sheetKey: 'HC CASE',
           originalIndex: i,
-          caseNo: row[3] || row[1] || 'SCA',
-          fileNo: row[1] || '',
-          advocate: (row[4] || '').trim() || 'અનિર્ણિત',
-          applicant: row[5] || '',
+          caseNo,
+          fileNo: hcCols.fileNoCol >= 0 ? (row[hcCols.fileNoCol] || '') : '',
+          advocate: (row[hcCols.advCol] || '').trim() || 'અનિર્ણિત',
+          applicant: row[hcCols.empCol] || '',
           court: 'હાઈકોર્ટ (HC)',
-          summary: row[6] || '',
-          status: status,
+          summary: row[hcCols.summaryCol] || '',
+          status: status || 'સુનાવણી મુદત',
           rawDate: dateStr,
           parsedDate: parsed,
           dayKey
@@ -128,24 +157,30 @@ export const HearingCalendarView: React.FC<HearingCalendarViewProps> = ({
 
     // 2. Labour Court Cases
     const labourRows = data['LABOUR CASE'] || [];
+    const labourCols = detectSheetColumns(labourRows[1], 'LABOUR CASE');
     for (let i = 2; i < labourRows.length; i++) {
       const row = labourRows[i];
-      if (!row || !row.some(c => c.trim())) continue;
+      if (!row || !row.some(c => c && c.trim())) continue;
 
-      const status = row[6] || '';
-      const dateStr = extractDateFromStatus(status);
+      const status = (row[labourCols.statusCol] || row[row.length - 1] || '').trim();
+      const dateStr = extractDateFromStatus(status) || extractDateFromRow(row, labourCols.statusCol);
       if (dateStr) {
         const { parsed, dayKey } = parseHearingDate(dateStr);
+        let caseNo = (row[labourCols.caseNoCol] || '').trim();
+        if (!caseNo) caseNo = row[1] || 'રેફ. નં';
+
+        const courtName = labourCols.courtCol >= 0 && row[labourCols.courtCol] ? row[labourCols.courtCol].trim() : 'સુરત';
+
         list.push({
           sheetKey: 'LABOUR CASE',
           originalIndex: i,
-          caseNo: row[1] || 'રેફ. નં',
+          caseNo,
           fileNo: '',
-          advocate: (row[3] || '').trim() || 'અનિર્ણિત',
-          applicant: row[4] || '',
-          court: `લેબર કોર્ટ (${row[2] || 'સુરત'})`,
-          summary: row[5] || '',
-          status: status,
+          advocate: (row[labourCols.advCol] || '').trim() || 'અનિર્ણિત',
+          applicant: row[labourCols.empCol] || '',
+          court: `લેબર કોર્ટ (${courtName})`,
+          summary: row[labourCols.summaryCol] || '',
+          status: status || 'સુનાવણી મુદત',
           rawDate: dateStr,
           parsedDate: parsed,
           dayKey
@@ -155,24 +190,30 @@ export const HearingCalendarView: React.FC<HearingCalendarViewProps> = ({
 
     // 3. Industrial Tribunal Cases
     const itRows = data['IT CASE'] || [];
+    const itCols = detectSheetColumns(itRows[1], 'IT CASE');
     for (let i = 2; i < itRows.length; i++) {
       const row = itRows[i];
-      if (!row || !row.some(c => c.trim())) continue;
+      if (!row || !row.some(c => c && c.trim())) continue;
 
-      const status = row[6] || '';
-      const dateStr = extractDateFromStatus(status);
+      const status = (row[itCols.statusCol] || row[row.length - 1] || '').trim();
+      const dateStr = extractDateFromStatus(status) || extractDateFromRow(row, itCols.statusCol);
       if (dateStr) {
         const { parsed, dayKey } = parseHearingDate(dateStr);
+        let caseNo = (row[itCols.caseNoCol] || '').trim();
+        if (!caseNo) caseNo = row[1] || 'રેફ. નં';
+
+        const courtName = itCols.courtCol >= 0 && row[itCols.courtCol] ? row[itCols.courtCol].trim() : 'સુરત';
+
         list.push({
           sheetKey: 'IT CASE',
           originalIndex: i,
-          caseNo: row[1] || 'રેફ. નં',
+          caseNo,
           fileNo: '',
-          advocate: (row[3] || '').trim() || 'અનિર્ણિત',
-          applicant: row[4] || '',
-          court: `ઔદ્યોગિક અદાલત IT (${row[2] || 'સુરત'})`,
-          summary: row[5] || '',
-          status: status,
+          advocate: (row[itCols.advCol] || '').trim() || 'અનિર્ણિત',
+          applicant: row[itCols.empCol] || '',
+          court: `ઔદ્યોગિક અદાલત IT (${courtName})`,
+          summary: row[itCols.summaryCol] || '',
+          status: status || 'સુનાવણી મુદત',
           rawDate: dateStr,
           parsedDate: parsed,
           dayKey

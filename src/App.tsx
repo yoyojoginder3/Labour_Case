@@ -7,6 +7,8 @@ import {
   INITIAL_METADATA,
   getStatusCategory,
   extractDateFromStatus,
+  extractDateFromRow,
+  detectSheetColumns,
   isValidCaseRow,
   isHeaderRow,
   isInvalidAdvocateName,
@@ -124,17 +126,25 @@ export default function App() {
     const list: Array<{ caseNo: string; rawDate: string; sheetKey: SheetKey; originalIndex: number }> = [];
     (['HC CASE', 'LABOUR CASE', 'IT CASE'] as SheetKey[]).forEach((sheetKey) => {
       const rows = data[sheetKey] || [];
-      const isHC = sheetKey === 'HC CASE';
-      const statusCol = isHC ? 10 : 6;
-      const caseNoCol = isHC ? 3 : 1;
+      const cols = detectSheetColumns(rows[1], sheetKey);
       for (let i = 2; i < rows.length; i++) {
         const row = rows[i];
-        if (!row) continue;
-        const status = row[statusCol] || '';
-        const dateStr = extractDateFromStatus(status);
+        if (!row || !isValidCaseRow(row) || isHeaderRow(row)) continue;
+        const status = (row[cols.statusCol] || row[row.length - 1] || '').trim();
+        const dateStr = extractDateFromStatus(status) || extractDateFromRow(row, cols.statusCol);
         if (dateStr) {
+          let caseNo = (row[cols.caseNoCol] || '').trim();
+          if (!caseNo) {
+            for (let c = 1; c <= Math.min(row.length - 1, 4); c++) {
+              if (row[c] && /\d+/.test(row[c])) {
+                caseNo = row[c].trim();
+                break;
+              }
+            }
+          }
+          if (!caseNo) caseNo = row[1] || 'SCA';
           list.push({
-            caseNo: row[caseNoCol] || row[1] || 'SCA',
+            caseNo,
             rawDate: dateStr,
             sheetKey,
             originalIndex: i
@@ -178,7 +188,7 @@ export default function App() {
     petitionerType: 'all'
   });
 
-  // Calculate statistics across all sheets
+  // Calculate statistics across all sheets dynamically
   const stats = useMemo(() => {
     let hcCount = 0;
     let labourCount = 0;
@@ -186,14 +196,15 @@ export default function App() {
     let finalHearingCount = 0;
     let disposedCount = (data['DISPOSED ARCHIVE']?.length || 2) - 2;
 
-    const checkRows = (sheetKey: SheetKey, statusColIdx: number) => {
+    const checkRows = (sheetKey: SheetKey) => {
       const rows = data[sheetKey] || [];
+      const cols = detectSheetColumns(rows[1], sheetKey);
       let count = 0;
       for (let i = 2; i < rows.length; i++) {
         const row = rows[i];
-        if (!row || !isValidCaseRow(row)) continue;
+        if (!row || !isValidCaseRow(row) || isHeaderRow(row)) continue;
         count++;
-        const status = row[statusColIdx] || '';
+        const status = (row[cols.statusCol] || row[row.length - 1] || '').trim();
         const cat = getStatusCategory(status);
         if (cat.type === 'final_hearing') finalHearingCount++;
         if (cat.type === 'disposed') disposedCount++;
@@ -201,9 +212,9 @@ export default function App() {
       return count;
     };
 
-    hcCount = checkRows('HC CASE', 10);
-    labourCount = checkRows('LABOUR CASE', 6);
-    itCount = checkRows('IT CASE', 6);
+    hcCount = checkRows('HC CASE');
+    labourCount = checkRows('LABOUR CASE');
+    itCount = checkRows('IT CASE');
 
     return {
       hcCount,
@@ -220,12 +231,13 @@ export default function App() {
     const advocatesMap = new Map<string, string>(); // lowercase key -> single standardized display name
     const courtsMap = new Map<string, string>();
 
-    const extract = (sheetKey: SheetKey, advCol: number, courtCol?: number) => {
+    const extract = (sheetKey: SheetKey) => {
       const rows = data[sheetKey] || [];
+      const cols = detectSheetColumns(rows[1], sheetKey);
       for (let i = 2; i < rows.length; i++) {
         const row = rows[i];
         if (!row || !isValidCaseRow(row) || isHeaderRow(row)) continue;
-        const rawAdv = row[advCol] || '';
+        const rawAdv = row[cols.advCol] || '';
         if (isInvalidAdvocateName(rawAdv)) continue;
         const cleanAdv = normalizeAdvocateName(rawAdv);
         const lowerKey = cleanAdv.toLowerCase();
@@ -233,8 +245,8 @@ export default function App() {
           advocatesMap.set(lowerKey, cleanAdv);
         }
 
-        if (courtCol && row[courtCol]) {
-          const rawCourt = row[courtCol] || '';
+        if (cols.courtCol >= 0 && row[cols.courtCol]) {
+          const rawCourt = row[cols.courtCol] || '';
           const cleanCourt = rawCourt.replace(/\s+/g, ' ').trim();
           if (cleanCourt && cleanCourt !== '-' && !cleanCourt.includes('લેબરકોર્ટ') && !cleanCourt.includes('કોર્ટ')) {
             const courtKey = cleanCourt.toLowerCase();
@@ -246,9 +258,9 @@ export default function App() {
       }
     };
 
-    extract('HC CASE', 4);
-    extract('LABOUR CASE', 3, 2);
-    extract('IT CASE', 3, 2);
+    extract('HC CASE');
+    extract('LABOUR CASE');
+    extract('IT CASE');
 
     return {
       advocateOptions: Array.from(advocatesMap.values()).sort((a, b) => a.localeCompare(b, 'gu')),
@@ -270,15 +282,43 @@ export default function App() {
       allCourtSheets.forEach((sKey) => {
         const rawRows = data[sKey] || [];
         const isHC = sKey === 'HC CASE';
-        const advCol = isHC ? 4 : 3;
-        const courtCol = isHC ? undefined : 2;
-        const statusCol = isHC ? 10 : 6;
-        const empCol = isHC ? 5 : 4;
+        const cols = detectSheetColumns(rawRows[1], sKey);
         const courtLabel = isHC ? 'હાઈકોર્ટ' : sKey === 'LABOUR CASE' ? 'લેબર કોર્ટ' : 'ઔદ્યોગિક (IT)';
 
         for (let i = 2; i < rawRows.length; i++) {
           const row = rawRows[i];
           if (!row || !isValidCaseRow(row) || isHeaderRow(row)) continue;
+
+          // Extract case values dynamically
+          let caseNo = (row[cols.caseNoCol] || '').trim();
+          if (!caseNo) {
+            for (let c = 1; c <= Math.min(row.length - 1, 4); c++) {
+              if (row[c] && /\d+/.test(row[c])) {
+                caseNo = row[c].trim();
+                break;
+              }
+            }
+          }
+          if (!caseNo) caseNo = isHC ? (row[1] || 'SCA') : (row[1] || 'રેફ. નં');
+
+          const fileOrLoc = isHC 
+            ? (cols.fileNoCol >= 0 && row[cols.fileNoCol] ? `HCE: ${row[cols.fileNoCol]}` : '-') 
+            : (cols.courtCol >= 0 && row[cols.courtCol] ? row[cols.courtCol] : 'સુરત');
+
+          let adv = (row[cols.advCol] || '').trim();
+          if (!adv) adv = '-';
+
+          let emp = (row[cols.empCol] || '').trim();
+          if (!emp) emp = '-';
+
+          let summary = (row[cols.summaryCol] || '').trim();
+          if (!summary) summary = '-';
+
+          let status = (row[cols.statusCol] || '').trim();
+          if (!status) {
+            status = (row[row.length - 1] || '').trim();
+          }
+          if (!status) status = '-';
 
           if (query) {
             const text = (row.join(' ') + ' ' + courtLabel).toLowerCase();
@@ -286,31 +326,28 @@ export default function App() {
           }
 
           if (filter.advocate) {
-            const rawAdv = row[advCol] || '';
-            const cleanAdv = normalizeAdvocateName(rawAdv);
+            const cleanAdv = normalizeAdvocateName(adv);
             if (cleanAdv !== filter.advocate) continue;
           }
 
           if (filter.court) {
-            const court = (courtCol !== undefined ? (row[courtCol] || '') : 'અમદાવાદ').trim();
+            const court = isHC ? 'અમદાવાદ' : (cols.courtCol >= 0 ? (row[cols.courtCol] || 'સુરત') : 'સુરત').trim();
             if (court !== filter.court) continue;
           }
 
           if (filter.statusType) {
-            const status = row[statusCol] || '';
             const cat = getStatusCategory(status);
             if (cat.type !== filter.statusType) continue;
           }
 
           if (filter.disposedOnly !== 'all') {
-            const status = row[statusCol] || '';
             const cat = getStatusCategory(status);
             if (filter.disposedOnly === 'disposed' && cat.type !== 'disposed') continue;
             if (filter.disposedOnly === 'pending' && cat.type === 'disposed') continue;
           }
 
           if (filter.petitionerType && filter.petitionerType !== 'all') {
-            const partyText = row[empCol] || '';
+            const partyText = emp;
             const caseKey = getCaseKey(sKey, row, i);
             const profile = employeeProfiles[caseKey];
             const pType = getPetitionerType(partyText, profile);
@@ -318,13 +355,6 @@ export default function App() {
           }
 
           // Build unified 8-column row representation
-          const caseNo = isHC ? (row[3] || row[1] || '-') : (row[1] || '-');
-          const fileOrLoc = isHC ? (row[1] ? `HCE: ${row[1]}` : '-') : (row[2] || 'સુરત');
-          const adv = row[advCol] || '-';
-          const emp = row[empCol] || '-';
-          const summary = isHC ? (row[6] || '-') : (row[5] || '-');
-          const status = row[statusCol] || '-';
-
           const unifiedRow = [
             serial.toString(),
             courtLabel,
@@ -347,13 +377,11 @@ export default function App() {
     // Individual sheet (HC CASE, LABOUR CASE, IT CASE)
     const rawRows = data[activeSheet] || [];
     const isHC = activeSheet === 'HC CASE';
-    const advCol = isHC ? 4 : 3;
-    const courtCol = isHC ? undefined : 2;
-    const statusCol = isHC ? 10 : 6;
+    const cols = detectSheetColumns(rawRows[1], activeSheet);
 
     for (let i = 2; i < rawRows.length; i++) {
       const row = rawRows[i];
-      if (!row || !isValidCaseRow(row)) continue;
+      if (!row || !isValidCaseRow(row) || isHeaderRow(row)) continue;
 
       if (query) {
         const text = row.join(' ').toLowerCase();
@@ -361,32 +389,31 @@ export default function App() {
       }
 
       if (filter.advocate) {
-        const rawAdv = row[advCol] || '';
+        const rawAdv = row[cols.advCol] || '';
         const cleanAdv = normalizeAdvocateName(rawAdv);
         if (cleanAdv !== filter.advocate) continue;
       }
 
-      if (filter.court && courtCol !== undefined) {
-        const court = (row[courtCol] || '').trim();
+      if (filter.court && cols.courtCol >= 0) {
+        const court = (row[cols.courtCol] || '').trim();
         if (court !== filter.court) continue;
       }
 
       if (filter.statusType) {
-        const status = row[statusCol] || '';
+        const status = row[cols.statusCol] || row[row.length - 1] || '';
         const cat = getStatusCategory(status);
         if (cat.type !== filter.statusType) continue;
       }
 
       if (filter.disposedOnly !== 'all') {
-        const status = row[statusCol] || '';
+        const status = row[cols.statusCol] || row[row.length - 1] || '';
         const cat = getStatusCategory(status);
         if (filter.disposedOnly === 'disposed' && cat.type !== 'disposed') continue;
         if (filter.disposedOnly === 'pending' && cat.type === 'disposed') continue;
       }
 
       if (filter.petitionerType && filter.petitionerType !== 'all') {
-        const empCol = isHC ? 5 : 4;
-        const partyText = row[empCol] || '';
+        const partyText = row[cols.empCol] || '';
         const caseKey = getCaseKey(activeSheet, row, i);
         const profile = employeeProfiles[caseKey];
         const pType = getPetitionerType(partyText, profile);
@@ -407,9 +434,8 @@ export default function App() {
 
     const countRow = (sKey: SheetKey, row: string[], idx: number) => {
       if (!row || !isValidCaseRow(row) || isHeaderRow(row)) return;
-      const isHC = sKey === 'HC CASE';
-      const empCol = isHC ? 5 : 4;
-      const partyText = row[empCol] || '';
+      const cols = detectSheetColumns(data[sKey]?.[1], sKey);
+      const partyText = row[cols.empCol] || '';
       const caseKey = getCaseKey(sKey, row, idx);
       const profile = employeeProfiles[caseKey];
       const pType = getPetitionerType(partyText, profile);
@@ -552,25 +578,12 @@ export default function App() {
     const rowToArchive = data[sourceSheet]?.[originalIndex];
     if (!rowToArchive) return;
 
-    let caseNo = '';
-    let advocate = '';
-    let applicant = '';
-    let summary = '';
-    let decisionInfo = '';
-
-    if (sourceSheet === 'HC CASE') {
-      caseNo = rowToArchive[3] || rowToArchive[1] || 'અજ્ઞાત';
-      advocate = rowToArchive[4] || '';
-      applicant = rowToArchive[5] || '';
-      summary = rowToArchive[6] || '';
-      decisionInfo = rowToArchive[10] || 'નિકાલ થયેલ / Disposed';
-    } else {
-      caseNo = rowToArchive[1] || 'અજ્ઞાત';
-      advocate = rowToArchive[3] || '';
-      applicant = rowToArchive[4] || '';
-      summary = rowToArchive[5] || '';
-      decisionInfo = rowToArchive[6] || 'નિકાલ થયેલ / Disposed';
-    }
+    const cols = detectSheetColumns(data[sourceSheet]?.[1], sourceSheet);
+    const caseNo = (rowToArchive[cols.caseNoCol] || rowToArchive[1] || 'અજ્ઞાત').trim();
+    const advocate = (rowToArchive[cols.advCol] || '').trim();
+    const applicant = (rowToArchive[cols.empCol] || '').trim();
+    const summary = (rowToArchive[cols.summaryCol] || '').trim();
+    const decisionInfo = (rowToArchive[cols.statusCol] || rowToArchive[rowToArchive.length - 1] || 'નિકાલ થયેલ / Disposed').trim();
 
     setData((prev) => {
       // 1. Add to DISPOSED ARCHIVE
@@ -837,17 +850,19 @@ export default function App() {
             const caseKey = getCaseKey(sKey, row, rIdx);
             const savedProfile = employeeProfiles[caseKey] || extractInitialProfileFromRow(sKey, row);
 
+            const cols = detectSheetColumns(rows[1], sKey);
             const isHC = sKey === 'HC CASE';
             const isLabour = sKey === 'LABOUR CASE' || sKey === 'IT CASE';
 
             const courtType = isHC ? 'હાઈકોર્ટ (HC)' : isLabour ? (sKey === 'LABOUR CASE' ? 'લેબર કોર્ટ' : 'ઔદ્યોગિક ટ્રિબ્યુનલ (IT)') : `નિકાલ (${row[1] || 'Disposed'})`;
-            const caseNo = isHC ? (row[3] || '-') : isLabour ? (row[1] || '-') : (row[2] || '-');
-            const fileNo = isHC ? (row[1] || '-') : '-';
-            const advocate = isHC ? (row[4] || '-') : isLabour ? (row[3] || '-') : (row[3] || '-');
-            const status = isHC ? (row[10] || '-') : isLabour ? (row[6] || '-') : (row[7] || row[6] || '-');
-            const hearingDate = extractDateFromStatus(status) || '-';
-            const lowerCourtOrder = isHC ? (row[2] || row[8] || '-') : (row[2] || '-');
-            const caseSummary = isHC ? (row[6] || '-') : isLabour ? (row[5] || '-') : (row[5] || '-');
+            const caseNo = (row[cols.caseNoCol] || row[1] || '-').trim();
+            const fileNo = cols.fileNoCol >= 0 ? (row[cols.fileNoCol] || '-') : '-';
+            const advocate = (row[cols.advCol] || '-').trim();
+            const status = (row[cols.statusCol] || row[row.length - 1] || '-').trim();
+            const hearingDate = extractDateFromStatus(status) || extractDateFromRow(row, cols.statusCol) || '-';
+            const lowerCourtOrder = cols.lowerCourtCol >= 0 ? (row[cols.lowerCourtCol] || '-') : (cols.courtCol >= 0 ? row[cols.courtCol] : '-');
+            const caseSummary = (row[cols.summaryCol] || '-').trim();
+            const partyName = (row[cols.empCol] || '').trim();
 
             dossierRows.push([
               serialCount.toString(),
@@ -855,7 +870,7 @@ export default function App() {
               caseNo,
               fileNo,
               advocate,
-              savedProfile.employeeName || (isHC ? row[5] : isLabour ? row[4] : row[4]) || '-',
+              savedProfile.employeeName || partyName || '-',
               savedProfile.dob || '-',
               savedProfile.designation || '-',
               savedProfile.pfNo || '-',

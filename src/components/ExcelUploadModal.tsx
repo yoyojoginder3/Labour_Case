@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { SheetKey, SheetDataMap, ActiveTab } from '../types/case';
-import { SHEET_CONFIGS, isValidCaseRow } from '../data/initialData';
+import { SHEET_CONFIGS, isValidCaseRow, excelSerialToDateStr, detectSheetColumns, gujaratiToEnglishDigits } from '../data/initialData';
 import { 
   Upload, 
   FileSpreadsheet, 
@@ -60,7 +60,7 @@ export const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
   if (!isOpen) return null;
 
   // Intelligently map sheet names
-  const resolveTargetKey = (sheetName: string, index: number): SheetKey => {
+  const resolveTargetKey = (sheetName: string, index: number, sampleRows?: string[][]): SheetKey => {
     const s = sheetName.toUpperCase().trim();
     if (s.includes('HC') || s.includes('HIGH') || s.includes('હાઈ') || s.includes('હાઇ')) {
       return 'HC CASE';
@@ -73,6 +73,20 @@ export const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
     }
     if (s.includes('DISPOSED') || s.includes('નિકાલ') || s.includes('ARCHIVE') || s.includes('ચુકાદો')) {
       return 'DISPOSED ARCHIVE';
+    }
+
+    // Inspect content of the sheet to detect court type if sheet name is generic (like "Sheet1")
+    if (sampleRows && sampleRows.length > 0) {
+      const sampleText = sampleRows.slice(0, 8).map(r => r.join(' ')).join(' ').toLowerCase();
+      if (sampleText.includes('sca') || sampleText.includes('lpa') || sampleText.includes('hce') || sampleText.includes('હાઈકોર્ટ')) {
+        return 'HC CASE';
+      }
+      if (sampleText.includes('ઔદ્યોગિક') || sampleText.includes('આઈ.ટી.') || sampleText.includes('it ref')) {
+        return 'IT CASE';
+      }
+      if (sampleText.includes('લેબરકોર્ટ') || sampleText.includes('લેબર') || sampleText.includes('lcs')) {
+        return 'LABOUR CASE';
+      }
     }
 
     // If current tab is a valid sheet, map to it for single-sheet file
@@ -89,8 +103,8 @@ export const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
 
   /**
    * Intelligently normalize uploaded sheet rows:
-   * 1. Detect if row 0 has a banner Title (e.g. "નામ. હાઈકોર્ટ સમક્ષના સુરત વિભાગના પડતર તમામ કેસોની માહિતી. (તા. ૧૭/૧૦/૨૦૨૬ સુધી)")
-   * 2. Detect column headers (row 0 or row 1)
+   * 1. Detect if row 0 has a banner Title
+   * 2. Detect column headers (row 0, 1, or 2) by scoring keyword presence
    * 3. Normalize into: [TitleRow, HeadersRow, ...DataRows]
    */
   const processSheetRows = (
@@ -116,59 +130,74 @@ export const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
       };
     }
 
-    const row0 = cleanRows[0];
-    const row0NonEmptyCount = row0.filter((c) => c !== '').length;
-    const row0FirstText = (row0[0] || '').trim();
+    // Find the header row by scoring legal/administrative column keywords
+    let headerRowIdx = -1;
+    let maxScore = 0;
 
-    // Check if row 0 is a Title banner row
-    const row0LooksLikeTitle =
-      (row0NonEmptyCount <= 3 && (row0FirstText.length > 15 || row0FirstText.includes('માહિતી') || row0FirstText.includes('સુધી') || row0FirstText.includes('કેસો') || row0FirstText.includes('GSRTC') || row0FirstText.includes('વિભાગ'))) ||
-      (!row0.some(c => c.includes('ક્રમ') || c.includes('નં') || c.toLowerCase().includes('sr') || c.toLowerCase().includes('no')) && 
-       cleanRows.length > 1 && 
-       cleanRows[1].some(c => c.includes('ક્રમ') || c.includes('નં') || c.toLowerCase().includes('sr') || c.toLowerCase().includes('no')));
-
-    if (row0LooksLikeTitle && cleanRows.length > 1) {
-      // Row 0 is the Title!
-      const title = row0FirstText || defaultTitle;
-      // Row 1 is the Column Headers
-      const rawHeaders = cleanRows[1];
-      // Clean headers up to the last non-empty one
-      let lastIdx = -1;
-      for (let i = rawHeaders.length - 1; i >= 0; i--) {
-        if (rawHeaders[i]) {
-          lastIdx = i;
-          break;
-        }
+    for (let r = 0; r < Math.min(cleanRows.length, 6); r++) {
+      const row = cleanRows[r];
+      // Skip if first cell is already a pure case serial number like 1, 2, 3
+      const firstCol = gujaratiToEnglishDigits(row[0] || '').trim();
+      if (/^\d+$/.test(firstCol) && parseInt(firstCol, 10) > 0 && r > 0) {
+        continue;
       }
-      const headers = lastIdx >= 0 ? rawHeaders.slice(0, lastIdx + 1) : defaultHeaders;
-      const dataRows = cleanRows.slice(2).filter((r) => isValidCaseRow(r));
 
-      // Standardize title row
-      const titleRow = [title, ...Array(Math.max(0, headers.length - 1)).fill('')];
-      return {
-        normalizedRows: [titleRow, headers, ...dataRows],
-        headers,
-        title
-      };
-    } else {
-      // Row 0 is directly the Column Headers!
-      let lastIdx = -1;
-      for (let i = row0.length - 1; i >= 0; i--) {
-        if (row0[i]) {
-          lastIdx = i;
-          break;
-        }
+      const joined = row.join(' ').toLowerCase();
+      let score = 0;
+      if (joined.includes('ક્રમ') || joined.includes('sr') || joined.includes('no.')) score += 2;
+      if (joined.includes('કેસ') || joined.includes('sca') || joined.includes('lpa') || joined.includes('રેફ') || joined.includes('ref')) score += 2;
+      if (joined.includes('એડવોકેટ') || joined.includes('વકીલ') || joined.includes('advocate')) score += 2;
+      if (joined.includes('કામદાર') || joined.includes('કર્મચારી') || joined.includes('અરજદાર') || joined.includes('પાર્ટી') || joined.includes('પક્ષકાર')) score += 2;
+      if (joined.includes('સ્ટેટસ') || joined.includes('status') || joined.includes('પરિસ્થિતી') || joined.includes('સ્થિતિ')) score += 2;
+      if (joined.includes('વિગત') || joined.includes('summary')) score += 1;
+      if (joined.includes('કોર્ટ') || joined.includes('લેબરકોર્ટ')) score += 1;
+
+      if (score > maxScore && score >= 2) {
+        maxScore = score;
+        headerRowIdx = r;
       }
-      const headers = lastIdx >= 0 ? row0.slice(0, lastIdx + 1) : defaultHeaders;
-      const title = defaultTitle;
-      const dataRows = cleanRows.slice(1).filter((r) => isValidCaseRow(r));
-      const titleRow = [title, ...Array(Math.max(0, headers.length - 1)).fill('')];
-      return {
-        normalizedRows: [titleRow, headers, ...dataRows],
-        headers,
-        title
-      };
     }
+
+    // Fallback if no high score row found
+    if (headerRowIdx === -1) {
+      const row0 = cleanRows[0];
+      const row0NonEmptyCount = row0.filter((c) => c !== '').length;
+      const row0FirstText = (row0[0] || '').trim();
+      const row0LooksLikeTitle =
+        row0NonEmptyCount <= 3 && (row0FirstText.length > 15 || row0FirstText.includes('માહિતી') || row0FirstText.includes('સુધી') || row0FirstText.includes('કેસો') || row0FirstText.includes('GSRTC'));
+
+      if (row0LooksLikeTitle && cleanRows.length > 1) {
+        headerRowIdx = 1;
+      } else {
+        headerRowIdx = 0;
+      }
+    }
+
+    let title = defaultTitle;
+    if (headerRowIdx > 0) {
+      const titleCandidate = (cleanRows[0][0] || '').trim();
+      if (titleCandidate.length > 8) {
+        title = titleCandidate;
+      }
+    }
+
+    const rawHeaders = cleanRows[headerRowIdx] || defaultHeaders;
+    let lastIdx = -1;
+    for (let i = rawHeaders.length - 1; i >= 0; i--) {
+      if (rawHeaders[i]) {
+        lastIdx = i;
+        break;
+      }
+    }
+    const headers = lastIdx >= 0 ? rawHeaders.slice(0, lastIdx + 1) : defaultHeaders;
+    const dataRows = cleanRows.slice(headerRowIdx + 1).filter((r) => isValidCaseRow(r));
+
+    const titleRow = [title, ...Array(Math.max(0, headers.length - 1)).fill('')];
+    return {
+      normalizedRows: [titleRow, headers, ...dataRows],
+      headers,
+      title
+    };
   };
 
   const handleFile = (file: File) => {
@@ -180,17 +209,71 @@ export const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
     reader.onload = (e) => {
       try {
         const dataBuffer = e.target?.result;
-        const wb = XLSX.read(dataBuffer, { type: 'array' });
+        // Parse workbook with complete date recognition and formatting options
+        const wb = XLSX.read(dataBuffer, { 
+          type: 'array',
+          cellDates: true,
+          cellNF: true,
+          dateNF: 'dd/mm/yyyy'
+        });
+
         const extractedWorkbook: SheetDataMap = {};
         const sheetDetails: ParsedSheetInfo[] = [];
 
         wb.SheetNames.forEach((sheetName, idx) => {
           const ws = wb.Sheets[sheetName];
-          const raw = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1, defval: '' });
+          // Read with raw: false so Excel applies dateNF (dd/mm/yyyy) to date cells
+          const raw = XLSX.utils.sheet_to_json<any[]>(ws, { 
+            header: 1, 
+            defval: '',
+            raw: false,
+            dateNF: 'dd/mm/yyyy'
+          });
           
           if (raw.length > 0) {
-            const targetKey = resolveTargetKey(sheetName, idx);
-            const { normalizedRows, headers, title } = processSheetRows(raw, targetKey);
+            // Clean and format cell values
+            const cleanRows: string[][] = raw.map((row: any[]) => {
+              return (Array.isArray(row) ? row : []).map((cell: any) => {
+                if (cell === null || cell === undefined) return '';
+                if (cell instanceof Date) {
+                  const d = String(cell.getDate()).padStart(2, '0');
+                  const m = String(cell.getMonth() + 1).padStart(2, '0');
+                  const y = cell.getFullYear();
+                  return `${d}/${m}/${y}`;
+                }
+                if (typeof cell === 'number') {
+                  if (cell >= 30000 && cell <= 65000) {
+                    const d = excelSerialToDateStr(cell);
+                    if (d) return d;
+                  }
+                  return cell.toString();
+                }
+                const str = String(cell).trim();
+                // Check if string is a 5-digit number representing an Excel date serial
+                if (/^\d{5}$/.test(str)) {
+                  const num = parseInt(str, 10);
+                  if (num >= 35000 && num <= 65000) {
+                    const d = excelSerialToDateStr(num);
+                    if (d) return d;
+                  }
+                }
+                // Check for embedded serial in "DATE- 45585"
+                if (/(?:date|તા|મુદત)[^\d]*(3\d{4}|4\d{4}|5\d{4})/i.test(str)) {
+                  const m = str.match(/(?:date|તા|મુદત)[^\d]*(3\d{4}|4\d{4}|5\d{4})/i);
+                  if (m) {
+                    const num = parseInt(m[1], 10);
+                    const d = excelSerialToDateStr(num);
+                    if (d) {
+                      return str.replace(m[1], d);
+                    }
+                  }
+                }
+                return str;
+              });
+            });
+
+            const targetKey = resolveTargetKey(sheetName, idx, cleanRows);
+            const { normalizedRows, headers, title } = processSheetRows(cleanRows, targetKey);
 
             if (normalizedRows.length > 0) {
               extractedWorkbook[targetKey] = normalizedRows;

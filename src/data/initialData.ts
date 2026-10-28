@@ -174,17 +174,120 @@ export const INITIAL_METADATA: SheetMetaMap = {
   }
 };
 
-/** Extracts date string from status cell (e.g. DATE-21/09/2026 or Date:- 08-10-2021) */
+/** Convert Gujarati numerals to standard English digits */
+export function gujaratiToEnglishDigits(str: string): string {
+  if (!str) return '';
+  const gujaratiDigits = ['૦', '૧', '૨', '૩', '૪', '૫', '૬', '૭', '૮', '૯'];
+  let result = str;
+  for (let i = 0; i < 10; i++) {
+    result = result.replace(new RegExp(gujaratiDigits[i], 'g'), i.toString());
+  }
+  return result;
+}
+
+/** Converts an Excel serial date number (e.g. 45585) into DD/MM/YYYY text */
+export function excelSerialToDateStr(serial: number): string {
+  if (isNaN(serial) || serial < 30000 || serial > 70000) return '';
+  const utcDays = Math.floor(serial - 25569);
+  const dateObj = new Date(utcDays * 86400 * 1000);
+  const dd = String(dateObj.getUTCDate()).padStart(2, '0');
+  const mm = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+  const yyyy = dateObj.getUTCFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+/** Extracts date string from status cell or any date-bearing cell (supports DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD, Excel serials, Gujarati numerals) */
 export function extractDateFromStatus(statusText: string): string | null {
   if (!statusText) return null;
-  const match = statusText.match(/(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})/);
-  return match ? match[1] : null;
+  const converted = gujaratiToEnglishDigits(String(statusText).trim());
+
+  // 1. Check for standard DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
+  const matchStandard = converted.match(/(\b\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}\b)/);
+  if (matchStandard) {
+    const rawMatch = matchStandard[1].replace(/[-.]/g, '/');
+    const parts = rawMatch.split('/');
+    if (parts.length === 3) {
+      let day = parseInt(parts[0], 10);
+      let month = parseInt(parts[1], 10);
+      let year = parseInt(parts[2], 10);
+      if (year < 100) year += 2000;
+      // If month > 12 and day <= 12, swap (handles MM/DD/YYYY from some Excel exports)
+      if (month > 12 && day <= 12) {
+        const tmp = day;
+        day = month;
+        month = tmp;
+      }
+      if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 1990 && year <= 2050) {
+        return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
+      }
+    }
+  }
+
+  // 2. Check for ISO format YYYY-MM-DD
+  const matchIso = converted.match(/(\b\d{4}[-/.]\d{1,2}[-/.]\d{1,2}\b)/);
+  if (matchIso) {
+    const parts = matchIso[1].replace(/[-.]/g, '/').split('/');
+    if (parts.length === 3) {
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10);
+      const day = parseInt(parts[2], 10);
+      if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+        return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
+      }
+    }
+  }
+
+  // 3. Check for standalone Excel numeric serial (e.g. 45585 or 46298)
+  const matchSerial = converted.match(/\b(3\d{4}|4\d{4}|5\d{4}|6\d{4})\b/);
+  if (matchSerial) {
+    const num = parseInt(matchSerial[1], 10);
+    const convertedDate = excelSerialToDateStr(num);
+    if (convertedDate) return convertedDate;
+  }
+
+  return null;
+}
+
+/** Scans across a case row to extract a hearing date, prioritizing status column then checking other cells */
+export function extractDateFromRow(row: string[], preferredColIdx?: number): string | null {
+  if (!row || row.length === 0) return null;
+
+  // 1. Try preferred column first
+  if (preferredColIdx !== undefined && preferredColIdx >= 0 && row[preferredColIdx]) {
+    const d = extractDateFromStatus(row[preferredColIdx]);
+    if (d) return d;
+  }
+
+  // 2. Scan from the last column backwards (status and date are usually near the end)
+  for (let c = row.length - 1; c >= 0; c--) {
+    if (c === preferredColIdx) continue;
+    const cell = row[c];
+    if (!cell || typeof cell !== 'string' || cell.trim() === '') continue;
+
+    // Skip cells that are obviously case numbers or file numbers like "12292/2012" or "8039"
+    const trimmed = cell.trim();
+    if (/^\d{3,6}\/\d{2,4}$/.test(trimmed)) continue; // e.g. 12292/2012
+    if (/^\d{1,6}$/.test(trimmed)) {
+      // Check if it's an Excel serial date (e.g. 45585)
+      const num = parseInt(trimmed, 10);
+      if (num >= 35000 && num <= 65000) {
+        const d = excelSerialToDateStr(num);
+        if (d) return d;
+      }
+      continue;
+    }
+
+    const d = extractDateFromStatus(trimmed);
+    if (d) return d;
+  }
+
+  return null;
 }
 
 /** Parses hearing date string (DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY) into Date object */
 export function parseHearingDateObj(dateStr: string): Date | null {
   if (!dateStr) return null;
-  const clean = dateStr.replace(/[-.]/g, '/').trim();
+  const clean = gujaratiToEnglishDigits(dateStr).replace(/[-.]/g, '/').trim();
   const parts = clean.split('/');
   if (parts.length === 3) {
     let day = parseInt(parts[0], 10);
@@ -196,6 +299,79 @@ export function parseHearingDateObj(dateStr: string): Date | null {
     }
   }
   return null;
+}
+
+export interface DetectedColumns {
+  caseNoCol: number;
+  fileNoCol: number;
+  advCol: number;
+  empCol: number;
+  courtCol: number;
+  summaryCol: number;
+  statusCol: number;
+  dateCol: number;
+  lowerCourtCol: number;
+}
+
+/**
+ * Dynamically detects column indexes for any sheet from its headers row,
+ * preventing broken layouts when user uploads an Excel with shifted or renamed columns.
+ */
+export function detectSheetColumns(headers: string[] | undefined, sheetKey?: SheetKey): DetectedColumns {
+  const isHC = sheetKey === 'HC CASE';
+  
+  // Sensible default fallback indexes
+  const result: DetectedColumns = {
+    caseNoCol: isHC ? 3 : 1,
+    fileNoCol: isHC ? 1 : -1,
+    lowerCourtCol: isHC ? 2 : -1,
+    advCol: isHC ? 4 : 3,
+    empCol: isHC ? 5 : 4,
+    courtCol: isHC ? -1 : 2,
+    summaryCol: isHC ? 6 : 5,
+    statusCol: isHC ? 10 : 6,
+    dateCol: isHC ? 10 : 6
+  };
+
+  if (!headers || !Array.isArray(headers) || headers.length === 0) {
+    return result;
+  }
+
+  // Scan headers to find best matching column indexes
+  headers.forEach((h, idx) => {
+    if (!h || typeof h !== 'string') return;
+    const clean = h.replace(/\n/g, ' ').toLowerCase().trim();
+
+    if (/સ્ટેટસ|status|પરિસ્થિતી|સ્થિતિ|હાલની|છેલ્લામાં/i.test(clean)) {
+      result.statusCol = idx;
+    }
+    if (/મુદત|તારીખ|hearing|સુનાવણી|next\s*date/i.test(clean)) {
+      result.dateCol = idx;
+    }
+    if (/sca|lpa|fa|sa|રેફ|ref|case\s*no|કેસ\s*નં|દાવા/i.test(clean) && !/ચુકાદા|નીચલી/i.test(clean)) {
+      result.caseNoCol = idx;
+    }
+    if (/hce|ફાઈલ/i.test(clean)) {
+      result.fileNoCol = idx;
+    }
+    if (/એડવોકેટ|વકીલ|advocate/i.test(clean)) {
+      result.advCol = idx;
+    }
+    if (/કર્મચારી|કામદાર|અરજદાર|પાર્ટી|workman|party|applicant|પક્ષકાર/i.test(clean)) {
+      result.empCol = idx;
+    }
+    if (/લેબરકોર્ટ|કોર્ટ|court|અદાલત|ટ્રિબ્યુનલ/i.test(clean) && !/નીચલી|ચુકાદા/i.test(clean)) {
+      result.courtCol = idx;
+    }
+    if (/વિગત|ટૂંકી|summary|તપસીલ|હકીકત/i.test(clean) && !/વચગાળા|ચુકાદા/i.test(clean)) {
+      result.summaryCol = idx;
+    }
+    if (/નીચલી|ચુકાદા|ચુકાદો|વચગાળા/i.test(clean)) {
+      result.lowerCourtCol = idx;
+    }
+  });
+
+  return result;
 }
 
 /** Categorizes case status for badges and filters */
@@ -259,17 +435,24 @@ export function getStatusCategory(statusText: string): {
 /** Check if row is a header row (should not be treated as a case) */
 export function isHeaderRow(row: string[]): boolean {
   if (!row || row.length === 0) return false;
+  // If the first column is a pure serial number (1, 2, 3...), it is a valid data row, NOT a header!
+  const firstCol = (row[0] || '').trim();
+  const englishFirst = gujaratiToEnglishDigits(firstCol);
+  if (/^\d+$/.test(englishFirst)) {
+    return false;
+  }
+
+  // Count header keywords present
   const joined = row.join(' ').toLowerCase();
-  return (
-    joined.includes('પેનલ એડવોકેટ') ||
-    joined.includes('ક્રમ નં') ||
-    joined.includes('હાલની છેલ્લામાં છેલ્લી') ||
-    joined.includes('કેસનું સ્ટેટસ') ||
-    joined.includes('ચુકાદાની ટૂંકી વિગત') ||
-    joined.includes('હોદ્દો/બેજ નં') ||
-    joined.includes('પાર્ટીનું નામ') ||
-    joined.includes('રેફ. નંબર')
-  );
+  let matches = 0;
+  if (joined.includes('પેનલ એડવોકેટ') || joined.includes('વકીલનું નામ') || joined.includes('advocate')) matches++;
+  if (joined.includes('ક્રમ નં') || joined.includes('sr. no') || joined.includes('sr no')) matches++;
+  if (joined.includes('હાલની છેલ્લામાં છેલ્લી') || joined.includes('કેસનું સ્ટેટસ') || joined.includes('સ્થિતિ')) matches++;
+  if (joined.includes('ચુકાદાની ટૂંકી વિગત') || joined.includes('કેસની ટૂંકી વિગત')) matches++;
+  if (joined.includes('હોદ્દો/બેજ નં') || joined.includes('કર્મચારીનું નામ') || joined.includes('કામદાર/ અરજદાર')) matches++;
+  if (joined.includes('રેફ. નંબર') || joined.includes('sca/lpa')) matches++;
+
+  return matches >= 2;
 }
 
 /** Check if an extracted advocate name is actually a header label or placeholder */
