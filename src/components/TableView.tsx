@@ -51,7 +51,8 @@ export const TableView: React.FC<TableViewProps> = ({
 
   const advocateColIndex = React.useMemo(() => {
     const idx = headers.findIndex((h) => 
-      h.includes('એડવોકેટ') || h.toLowerCase().includes('advocate')
+      (h.includes('પેનલ એડવોકેટ') || h.includes('વકીલનું નામ')) ||
+      ((h.includes('એડવોકેટ') || h.toLowerCase().includes('advocate')) && !h.includes('પેપર્સ') && !h.includes('સુપ્રત') && !h.includes('પત્ર'))
     );
     return idx !== -1 ? idx : (sheetKey === 'HC CASE' ? 4 : 3);
   }, [headers, sheetKey]);

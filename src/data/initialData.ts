@@ -369,7 +369,9 @@ export function detectSheetColumns(headers: string[] | undefined, sheetKey?: She
     if (/hce|ફાઈલ/i.test(clean)) {
       result.fileNoCol = idx;
     }
-    if (/એડવોકેટ|વકીલ|advocate/i.test(clean)) {
+    if (/પેનલ\s*એડવોકેટ|વકીલનું\s*નામ|advocate\s*name/i.test(clean)) {
+      result.advCol = idx;
+    } else if (/એડવોકેટ|વકીલ|advocate/i.test(clean) && !/પેપર્સ|સુપ્રત|પત્ર|તારીખ|ચુકાદા|letter|paper|date/i.test(clean)) {
       result.advCol = idx;
     }
     if (/કર્મચારી|કામદાર|અરજદાર|પાર્ટી|workman|party|applicant|પક્ષકાર/i.test(clean)) {
@@ -479,7 +481,7 @@ export function isHeaderRow(row: string[]): boolean {
 export function isInvalidAdvocateName(name: string): boolean {
   if (!name) return true;
   const normalized = name.replace(/\s+/g, ' ').trim().toLowerCase();
-  return (
+  if (
     normalized === '' ||
     normalized === '-' ||
     normalized === '--' ||
@@ -494,9 +496,24 @@ export function isInvalidAdvocateName(name: string): boolean {
     normalized.includes('કેસ નં') ||
     normalized.includes('હોદ્દો') ||
     normalized.includes('વિગત') ||
+    normalized.includes('પત્ર નં') ||
+    normalized.includes('સુપ્રત') ||
+    normalized.includes('પેપર્સ') ||
+    normalized.includes('તા.') ||
+    normalized.includes('તારીખ') ||
+    /^\d+[-/.]\d+/.test(normalized) ||
+    /^\d+$/.test(normalized) ||
     normalized === 'અરજદાર' ||
     normalized === 'સામાવાળા'
-  );
+  ) {
+    return true;
+  }
+
+  // Advocate names should have letters and usually be under 45 characters without dates
+  if (normalized.length > 45) return true;
+  if (/(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})/.test(normalized)) return true;
+
+  return false;
 }
 
 /** Standardize advocate name spacing so duplicates are prevented */

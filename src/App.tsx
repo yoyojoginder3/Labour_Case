@@ -179,15 +179,24 @@ export default function App() {
 
   const isAdmin = currentUser?.role === 'admin';
 
-  // Filters State
-  const [filter, setFilter] = useState<CaseFilter>({
+  const DEFAULT_FILTER: CaseFilter = {
     searchQuery: '',
     advocate: '',
     court: '',
     statusType: '',
     disposedOnly: 'all',
     petitionerType: 'all'
-  });
+  };
+
+  // Filters State
+  const [filter, setFilter] = useState<CaseFilter>(DEFAULT_FILTER);
+
+  // Switch tabs and automatically reset all filters & dropdowns back to default ("પહેલા જેવું")
+  const handleTabChange = (newTab: ActiveTab) => {
+    setActiveSheet(newTab);
+    setSelectedRowIndex(null);
+    setFilter({ ...DEFAULT_FILTER });
+  };
 
   // Calculate statistics across all sheets dynamically
   const stats = useMemo(() => {
@@ -521,7 +530,7 @@ export default function App() {
       };
     });
 
-    setActiveSheet(targetSheet);
+    handleTabChange(targetSheet);
     setSelectedRowIndex(2);
     showToast(`🎉 નવો કેસ "${targetSheet}" માં સફળતાપૂર્વક ઉમેરાયો!`, 'success');
 
@@ -1125,7 +1134,7 @@ export default function App() {
       {/* Main Header with Auth and Navigation */}
       <Header
         activeSheet={activeSheet}
-        onSelectTab={setActiveSheet}
+        onSelectTab={handleTabChange}
         onOpenAddModal={() => setIsAddModalOpen(true)}
         onOpenExcelUpload={() => setIsExcelUploadModalOpen(true)}
         onOpenNotifications={() => setIsNotificationModalOpen(true)}
@@ -1220,7 +1229,7 @@ export default function App() {
           <HearingCalendarView
             data={data}
             onSelectCase={(sheetKey, originalIndex) => {
-              setActiveSheet(sheetKey);
+              handleTabChange(sheetKey);
               setDetailModalIndex(originalIndex);
             }}
           />
@@ -1382,7 +1391,7 @@ export default function App() {
           data={data}
           onClose={() => setIsNotificationModalOpen(false)}
           onSelectCase={(sheetKey, originalIndex) => {
-            setActiveSheet(sheetKey);
+            handleTabChange(sheetKey);
             setDetailModalIndex(originalIndex);
           }}
         />
