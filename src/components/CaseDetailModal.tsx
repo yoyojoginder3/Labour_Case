@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { SheetKey, EmployeeProfile } from '../types/case';
 import { getStatusCategory, extractDateFromStatus, extractInitialProfileFromRow } from '../data/initialData';
+import { DatePickerField } from './DatePickerField';
 import { 
   X, 
   Printer, 
@@ -298,7 +299,53 @@ PF નં.: ${profileData.pfNo || '-'}
                       {header}
                     </label>
                     {isEditing ? (
-                      isFullWidth ? (
+                      (header.includes('તારીખ') || header.includes('date')) && !header.includes('સ્ટેટસ') && !header.includes('પરિસ્થિતી') && !header.includes('પેપર્સ') ? (
+                        <DatePickerField
+                          value={val}
+                          onChange={(d) => handleFieldChange(idx, d)}
+                          placeholder="DD/MM/YYYY પસંદ કરો..."
+                          inputStyle={{
+                            backgroundColor: '#ffffff',
+                            color: '#0f172a',
+                            border: '2px solid #2563eb'
+                          }}
+                        />
+                      ) : (header.includes('સ્ટેટસ') || header.includes('પરિસ્થિતી')) ? (
+                        <div className="space-y-2">
+                          <textarea
+                            rows={3}
+                            value={val}
+                            onChange={(e) => handleFieldChange(idx, e.target.value)}
+                            style={{
+                              backgroundColor: '#ffffff',
+                              color: '#0f172a',
+                              border: '2px solid #2563eb'
+                            }}
+                            className="w-full text-xs sm:text-sm p-2.5 rounded-xl font-bold text-slate-950 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-600 outline-none"
+                          />
+                          <div className="p-2.5 bg-orange-50 rounded-xl border border-orange-200">
+                            <label className="block text-[11px] font-black text-orange-900 mb-1 flex items-center gap-1">
+                              <Calendar className="w-3.5 h-3.5 text-orange-600" />
+                              <span>🗓️ સુનાવણી / મુદત તારીખ (Date Picker):</span>
+                            </label>
+                            <DatePickerField
+                              value={extractDateFromStatus(val) || ''}
+                              onChange={(d) => {
+                                if (!d) return;
+                                if (/(DATE|Date|તારીખ)[:\s-]*\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}/i.test(val)) {
+                                  handleFieldChange(idx, val.replace(/(DATE|Date|તારીખ)[:\s-]*\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}/i, `DATE-${d}`));
+                                } else if (/\b\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}\b/.test(val)) {
+                                  handleFieldChange(idx, val.replace(/\b\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}\b/, d));
+                                } else {
+                                  handleFieldChange(idx, `${val.trim()}\nDATE-${d}`);
+                                }
+                              }}
+                              placeholder="મુદત તારીખ પસંદ કરો..."
+                              inputStyle={{ backgroundColor: '#ffffff', border: '1.5px solid #fb923c' }}
+                            />
+                          </div>
+                        </div>
+                      ) : isFullWidth ? (
                         <textarea
                           rows={3}
                           value={val}
@@ -431,13 +478,11 @@ PF નં.: ${profileData.pfNo || '-'}
                     <span>૨. જન્મ તારીખ (Date of Birth)</span>
                   </label>
                   {isEditing ? (
-                    <input
-                      type="text"
+                    <DatePickerField
                       value={profileData.dob}
-                      onChange={(e) => handleProfileFieldChange('dob', e.target.value)}
-                      placeholder="DD/MM/YYYY..."
-                      style={{ backgroundColor: '#ffffff', border: '1.5px solid #60a5fa' }}
-                      className="w-full text-xs sm:text-sm p-2 rounded-xl font-bold text-slate-900 font-mono"
+                      onChange={(d) => handleProfileFieldChange('dob', d)}
+                      placeholder="DD/MM/YYYY પસંદ કરો..."
+                      inputStyle={{ backgroundColor: '#ffffff', border: '1.5px solid #60a5fa' }}
                     />
                   ) : (
                     <div className="text-xs sm:text-sm font-bold text-slate-900 font-mono">{profileData.dob || '-'}</div>
@@ -489,13 +534,11 @@ PF નં.: ${profileData.pfNo || '-'}
                     <span>૫. નોકરીમાં નિમણુકની તારીખ (Appointment Date)</span>
                   </label>
                   {isEditing ? (
-                    <input
-                      type="text"
+                    <DatePickerField
                       value={profileData.appointmentDate}
-                      onChange={(e) => handleProfileFieldChange('appointmentDate', e.target.value)}
-                      placeholder="DD/MM/YYYY..."
-                      style={{ backgroundColor: '#ffffff', border: '1.5px solid #93c5fd' }}
-                      className="w-full text-xs sm:text-sm p-2 rounded-xl font-bold text-slate-900 font-mono"
+                      onChange={(d) => handleProfileFieldChange('appointmentDate', d)}
+                      placeholder="DD/MM/YYYY પસંદ કરો..."
+                      inputStyle={{ backgroundColor: '#ffffff', border: '1.5px solid #93c5fd' }}
                     />
                   ) : (
                     <div className="text-xs sm:text-sm font-bold text-slate-900 font-mono">{profileData.appointmentDate || '-'}</div>
@@ -509,13 +552,11 @@ PF નં.: ${profileData.pfNo || '-'}
                     <span>૬. નિવૃત્તિ તારીખ (Retirement Date)</span>
                   </label>
                   {isEditing ? (
-                    <input
-                      type="text"
+                    <DatePickerField
                       value={profileData.retirementDate}
-                      onChange={(e) => handleProfileFieldChange('retirementDate', e.target.value)}
-                      placeholder="DD/MM/YYYY..."
-                      style={{ backgroundColor: '#ffffff', border: '1.5px solid #fdba74' }}
-                      className="w-full text-xs sm:text-sm p-2 rounded-xl font-bold text-slate-900 font-mono"
+                      onChange={(d) => handleProfileFieldChange('retirementDate', d)}
+                      placeholder="DD/MM/YYYY પસંદ કરો..."
+                      inputStyle={{ backgroundColor: '#ffffff', border: '1.5px solid #fdba74' }}
                     />
                   ) : (
                     <div className="text-xs sm:text-sm font-bold text-slate-900 font-mono">{profileData.retirementDate || '-'}</div>

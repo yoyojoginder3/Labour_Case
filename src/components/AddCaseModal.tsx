@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { SheetKey, EmployeeProfile } from '../types/case';
-import { SHEET_CONFIGS } from '../data/initialData';
+import { SHEET_CONFIGS, extractDateFromStatus } from '../data/initialData';
+import { DatePickerField } from './DatePickerField';
 import { 
   X, 
   Plus, 
@@ -104,6 +105,17 @@ export const AddCaseModal: React.FC<AddCaseModalProps> = ({
 
   const handleProfileChange = (key: keyof EmployeeProfile, val: string) => {
     setEmpProfile((prev) => ({ ...prev, [key]: val }));
+  };
+
+  const handleHearingDateSelect = (selectedDate: string) => {
+    if (!selectedDate) return;
+    if (/(DATE|Date|તારીખ)[:\s-]*\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}/i.test(statusVal)) {
+      setStatusVal(statusVal.replace(/(DATE|Date|તારીખ)[:\s-]*\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}/i, `DATE-${selectedDate}`));
+    } else if (/\b\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}\b/.test(statusVal)) {
+      setStatusVal(statusVal.replace(/\b\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}\b/, selectedDate));
+    } else {
+      setStatusVal(`${statusVal.trim()}\nDATE-${selectedDate}`);
+    }
   };
 
   const disputePresets = [
@@ -351,13 +363,11 @@ export const AddCaseModal: React.FC<AddCaseModalProps> = ({
                     <Calendar className="w-4 h-4 text-blue-600" />
                     <span>૨. જન્મ તારીખ (Date of Birth)</span>
                   </label>
-                  <input
-                    type="text"
+                  <DatePickerField
                     value={empProfile.dob}
-                    onChange={(e) => handleProfileChange('dob', e.target.value)}
-                    placeholder="ઉદા. 15/06/1975..."
-                    style={{ backgroundColor: '#eff6ff', border: '1.5px solid #60a5fa' }}
-                    className="w-full text-xs sm:text-sm p-2 rounded-xl font-bold text-slate-900 focus:ring-2 focus:ring-blue-500 font-mono"
+                    onChange={(val) => handleProfileChange('dob', val)}
+                    placeholder="DD/MM/YYYY પસંદ કરો..."
+                    inputStyle={{ backgroundColor: '#eff6ff', border: '1.5px solid #60a5fa' }}
                   />
                 </div>
 
@@ -416,13 +426,11 @@ export const AddCaseModal: React.FC<AddCaseModalProps> = ({
                     <Calendar className="w-4 h-4 text-blue-600" />
                     <span>૫. નોકરીમાં નિમણુકની તારીખ (Appointment Date)</span>
                   </label>
-                  <input
-                    type="text"
+                  <DatePickerField
                     value={empProfile.appointmentDate}
-                    onChange={(e) => handleProfileChange('appointmentDate', e.target.value)}
-                    placeholder="ઉદા. 01/08/1998..."
-                    style={{ backgroundColor: '#eff6ff', border: '1.5px solid #93c5fd' }}
-                    className="w-full text-xs sm:text-sm p-2 rounded-xl font-bold text-slate-900 focus:ring-2 focus:ring-blue-500 font-mono"
+                    onChange={(val) => handleProfileChange('appointmentDate', val)}
+                    placeholder="DD/MM/YYYY પસંદ કરો..."
+                    inputStyle={{ backgroundColor: '#eff6ff', border: '1.5px solid #93c5fd' }}
                   />
                 </div>
 
@@ -432,13 +440,11 @@ export const AddCaseModal: React.FC<AddCaseModalProps> = ({
                     <Calendar className="w-4 h-4 text-orange-600" />
                     <span>૬. નિવૃત્તિ તારીખ (Retirement Date)</span>
                   </label>
-                  <input
-                    type="text"
+                  <DatePickerField
                     value={empProfile.retirementDate}
-                    onChange={(e) => handleProfileChange('retirementDate', e.target.value)}
-                    placeholder="ઉદા. 30/06/2033..."
-                    style={{ backgroundColor: '#fff7ed', border: '1.5px solid #fdba74' }}
-                    className="w-full text-xs sm:text-sm p-2 rounded-xl font-bold text-slate-900 focus:ring-2 focus:ring-orange-500 font-mono"
+                    onChange={(val) => handleProfileChange('retirementDate', val)}
+                    placeholder="DD/MM/YYYY પસંદ કરો..."
+                    inputStyle={{ backgroundColor: '#fff7ed', border: '1.5px solid #fdba74' }}
                   />
                 </div>
 
@@ -735,14 +741,33 @@ export const AddCaseModal: React.FC<AddCaseModalProps> = ({
                       </button>
                     ))}
                   </div>
-                  <textarea
-                    rows={2}
-                    value={statusVal}
-                    onChange={(e) => setStatusVal(e.target.value)}
-                    placeholder="ઉદા. 182-FOR FINAL HEARING DATE-20/10/2026..."
-                    style={{ backgroundColor: '#fff7ed', border: '1.5px solid #fdba74' }}
-                    className="w-full text-xs sm:text-sm p-2 rounded-xl font-bold text-slate-900 focus:ring-2 focus:ring-orange-500"
-                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    <div>
+                      <label className="block text-[11px] font-black text-orange-900 mb-1 flex items-center gap-1">
+                        <Calendar className="w-3.5 h-3.5 text-orange-600" />
+                        <span>🗓️ સુનાવણી / મુદત તારીખ (Date Picker):</span>
+                      </label>
+                      <DatePickerField
+                        value={extractDateFromStatus(statusVal) || ''}
+                        onChange={handleHearingDateSelect}
+                        placeholder="મુદત તારીખ પસંદ કરો..."
+                        inputStyle={{ backgroundColor: '#fff7ed', border: '1.5px solid #fb923c' }}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-black text-orange-900 mb-1">
+                        સ્ટેટસ લખાણ (Status Text):
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={statusVal}
+                        onChange={(e) => setStatusVal(e.target.value)}
+                        placeholder="ઉદા. 182-FOR FINAL HEARING DATE-20/10/2026..."
+                        style={{ backgroundColor: '#fff7ed', border: '1.5px solid #fdba74' }}
+                        className="w-full text-xs sm:text-sm p-2 rounded-xl font-bold text-slate-900 focus:ring-2 focus:ring-orange-500"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
