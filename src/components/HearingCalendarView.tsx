@@ -22,8 +22,19 @@ import {
   AlertCircle,
   ExternalLink,
   Search,
-  Filter
+  Filter,
+  MessageSquare,
+  Smartphone,
+  Share2,
+  Send,
+  Phone
 } from 'lucide-react';
+import { 
+  HearingMessageModal, 
+  formatSingleCaseMessage, 
+  formatBoardMessage,
+  HearingItemForMsg 
+} from './HearingMessageModal';
 
 interface HearingItem {
   sheetKey: SheetKey;
@@ -110,6 +121,10 @@ export const HearingCalendarView: React.FC<HearingCalendarViewProps> = ({
   const [selectedDayKey, setSelectedDayKey] = useState<string | null>(todayDayKey);
   const [courtFilter, setCourtFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // WhatsApp & SMS messaging state
+  const [isMsgModalOpen, setIsMsgModalOpen] = useState(false);
+  const [msgModalCaseIdx, setMsgModalCaseIdx] = useState<number | null>(null);
 
   // Extract all scheduled hearings across HC, Labour, and IT cases
   const allHearings = useMemo(() => {
@@ -323,6 +338,43 @@ export const HearingCalendarView: React.FC<HearingCalendarViewProps> = ({
     window.print();
   };
 
+  // WhatsApp & SMS Handlers
+  const handleOpenBoardMessage = () => {
+    setMsgModalCaseIdx(null);
+    setIsMsgModalOpen(true);
+  };
+
+  const handleOpenCaseMessage = (caseIdx: number) => {
+    setMsgModalCaseIdx(caseIdx);
+    setIsMsgModalOpen(true);
+  };
+
+  const handleQuickSendWhatsAppBoard = () => {
+    const phone = localStorage.getItem('gsrtc_officer_mobile_number') || '';
+    const dateLabel = selectedDayKey === todayDayKey 
+      ? todayFormattedGujarati 
+      : (activeHearings[0]?.rawDate || selectedDayKey || todayShortDate);
+    const text = encodeURIComponent(formatBoardMessage(activeHearings, dateLabel));
+    let url = `https://api.whatsapp.com/send?text=${text}`;
+    if (phone.trim()) {
+      const cleanPhone = phone.replace(/\D/g, '');
+      const formatted = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+      url = `https://api.whatsapp.com/send?phone=${formatted}&text=${text}`;
+    }
+    window.open(url, '_blank');
+  };
+
+  const handleQuickSendSMSBoard = () => {
+    const phone = localStorage.getItem('gsrtc_officer_mobile_number') || '';
+    const dateLabel = selectedDayKey === todayDayKey 
+      ? todayFormattedGujarati 
+      : (activeHearings[0]?.rawDate || selectedDayKey || todayShortDate);
+    const text = encodeURIComponent(formatBoardMessage(activeHearings, dateLabel));
+    const cleanPhone = phone ? phone.replace(/\D/g, '') : '';
+    const url = cleanPhone ? `sms:${cleanPhone}?body=${text}` : `sms:?body=${text}`;
+    window.open(url, '_blank');
+  };
+
   return (
     <div className="space-y-5">
       {/* Top Banner with Vibrant Gradient & Always-Visible Current Date */}
@@ -382,6 +434,20 @@ export const HearingCalendarView: React.FC<HearingCalendarViewProps> = ({
               className="px-3.5 py-2 rounded-xl text-xs font-black transition-all shadow-md hover:scale-105 active:scale-95 cursor-pointer"
             >
               બધી મુદતો ({allHearings.length})
+            </button>
+
+            <button
+              type="button"
+              onClick={handleOpenBoardMessage}
+              style={{
+                background: 'linear-gradient(135deg, #15803d 0%, #16a34a 100%)',
+                color: '#ffffff'
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black shadow-lg hover:brightness-110 active:scale-95 transition-all cursor-pointer"
+              title="વોટ્સએપ અથવા SMS પર મુદત બોર્ડ મોકલો"
+            >
+              <MessageSquare className="w-4 h-4 stroke-[2.5]" />
+              <span>વોટ્સએપ / SMS સંદેશ</span>
             </button>
 
             <button
@@ -742,7 +808,55 @@ export const HearingCalendarView: React.FC<HearingCalendarViewProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                {activeHearings.length > 0 && (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={handleQuickSendWhatsAppBoard}
+                      style={{
+                        backgroundColor: '#15803d',
+                        color: '#ffffff',
+                        border: '1.5px solid #4ade80'
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl text-xs font-black shadow-md hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                      title="આ તારીખનું મુદત બોર્ડ વોટ્સએપ પર મોકલો"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span>WhatsApp</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleQuickSendSMSBoard}
+                      style={{
+                        backgroundColor: '#0284c7',
+                        color: '#ffffff',
+                        border: '1.5px solid #7dd3fc'
+                      }}
+                      className="px-2.5 py-1.5 rounded-xl text-xs font-black shadow-md hover:brightness-110 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                      title="આ તારીખનું મુદત બોર્ડ SMS પર મોકલો"
+                    >
+                      <Smartphone className="w-3.5 h-3.5" />
+                      <span>SMS</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleOpenBoardMessage}
+                      style={{
+                        backgroundColor: 'rgba(255,255,255,0.2)',
+                        color: '#ffffff',
+                        border: '1.5px solid rgba(255,255,255,0.4)'
+                      }}
+                      className="p-1.5 rounded-xl text-xs font-bold hover:bg-white/30 transition-all cursor-pointer"
+                      title="સંદેશ પ્રિવ્યૂ અને કસ્ટમાઇઝ કરો"
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+
                 {selectedDayKey !== todayDayKey && (
                   <button
                     type="button"
@@ -905,7 +1019,7 @@ export const HearingCalendarView: React.FC<HearingCalendarViewProps> = ({
                       </div>
 
                       {/* Status and Action Buttons */}
-                      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-100">
                         <div className="flex items-center gap-1.5">
                           <span 
                             style={{
@@ -919,14 +1033,47 @@ export const HearingCalendarView: React.FC<HearingCalendarViewProps> = ({
                           </span>
                         </div>
 
-                        <button
-                          onClick={() => onSelectCase(item.sheetKey, item.originalIndex)}
-                          style={{ backgroundColor: '#1d4ed8', color: '#ffffff' }}
-                          className="px-3 py-1.5 rounded-xl text-xs font-bold hover:brightness-110 shadow-xs flex items-center gap-1.5 transition-all"
-                        >
-                          <span>કેસ ફાઈલ જુઓ</span>
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenCaseMessage(idx)}
+                            style={{
+                              backgroundColor: '#f0fdf4',
+                              color: '#15803d',
+                              border: '1.5px solid #86efac'
+                            }}
+                            className="px-2.5 py-1.5 rounded-xl text-xs font-bold hover:bg-emerald-100 shadow-2xs flex items-center gap-1 transition-all cursor-pointer"
+                            title="વોટ્સએપ પર આ કેસની મુદત મોકલો"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>WhatsApp</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleOpenCaseMessage(idx)}
+                            style={{
+                              backgroundColor: '#f0f9ff',
+                              color: '#0369a1',
+                              border: '1.5px solid #bae6fd'
+                            }}
+                            className="px-2.5 py-1.5 rounded-xl text-xs font-bold hover:bg-sky-100 shadow-2xs flex items-center gap-1 transition-all cursor-pointer"
+                            title="SMS પર આ કેસની મુદત મોકલો"
+                          >
+                            <Smartphone className="w-3.5 h-3.5 text-sky-600" />
+                            <span>SMS</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => onSelectCase(item.sheetKey, item.originalIndex)}
+                            style={{ backgroundColor: '#1d4ed8', color: '#ffffff' }}
+                            className="px-3 py-1.5 rounded-xl text-xs font-bold hover:brightness-110 shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                          >
+                            <span>કેસ ફાઈલ</span>
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
@@ -936,6 +1083,16 @@ export const HearingCalendarView: React.FC<HearingCalendarViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Hearing WhatsApp & SMS Modal */}
+      <HearingMessageModal
+        isOpen={isMsgModalOpen}
+        onClose={() => setIsMsgModalOpen(false)}
+        dateStr={selectedDayKey === todayDayKey ? todayShortDate : (activeHearings[0]?.rawDate || selectedDayKey || todayShortDate)}
+        fullDateGujarati={selectedDayKey === todayDayKey ? todayFormattedGujarati : undefined}
+        hearings={activeHearings}
+        initialCaseIndex={msgModalCaseIdx}
+      />
     </div>
   );
 };

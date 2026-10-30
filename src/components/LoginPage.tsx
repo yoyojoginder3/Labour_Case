@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { AuthUser, UserRole } from '../types/case';
 import { ShieldCheck, Lock, KeyRound, UserCheck, Eye, EyeOff, AlertCircle, Scale, Building2, CheckCircle2, ArrowRight } from 'lucide-react';
+import { validateLoginCredentials, getStoredCredentials } from '../utils/authUtils';
+import { ForgotPasswordModal } from './ForgotPasswordModal';
 
 interface LoginPageProps {
   onLogin: (user: AuthUser) => void;
@@ -19,45 +21,36 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, stats }) => {
   const [password, setPassword] = useState('1234');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [resetSuccessNotice, setResetSuccessNotice] = useState('');
+  const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
 
   const handleRoleSelect = (role: UserRole) => {
     setSelectedRole(role);
     setError('');
+    setResetSuccessNotice('');
+    const creds = getStoredCredentials();
     if (role === 'admin') {
       setUsername('admin');
-      setPassword('1234');
+      setPassword(creds.adminPasswordHash);
     } else {
       setUsername('staff');
-      setPassword('viewer');
+      setPassword(creds.staffPasswordHash || 'viewer');
     }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setResetSuccessNotice('');
 
-    if (selectedRole === 'admin') {
-      if (!username.trim() || !password.trim()) {
-        setError('કૃપા કરીને યુઝરનેમ અને પાસવર્ડ દાખલ કરો');
-        return;
-      }
-      if (password === '1234' || password === 'admin' || password === 'gsrtc') {
-        onLogin({
-          username: username.trim(),
-          name: 'કાનૂની અધિકારીશ્રી (Admin)',
-          role: 'admin',
-          designation: 'મુખ્ય કાનૂની અધિકારી, સુરત વિભાગ'
-        });
-      } else {
-        setError('ખોટો પાસવર્ડ! કૃપા કરીને 1234 દાખલ કરો.');
-      }
-    } else {
-      onLogin({
-        username: username.trim() || 'staff',
-        name: 'લેબર શાખા સ્ટાફ (Viewer)',
-        role: 'viewer',
-        designation: 'વાંચન મોડ'
-      });
+    const res = validateLoginCredentials(selectedRole, username, password);
+    if (!res.success) {
+      setError(res.message || 'અમાન્ય યુઝરનેમ અથવા પાસવર્ડ!');
+      return;
+    }
+
+    if (res.user) {
+      onLogin(res.user);
     }
   };
 
@@ -162,8 +155,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, stats }) => {
                 style={{ backgroundColor: '#ffe4e6', color: '#9f1239', border: '1.5px solid #f43f5e' }}
                 className="p-3 rounded-xl text-xs font-bold flex items-center gap-2"
               >
-                <AlertCircle className="w-4 h-4 shrink-0" />
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
                 <span>{error}</span>
+              </div>
+            )}
+
+            {resetSuccessNotice && (
+              <div 
+                style={{ backgroundColor: '#dcfce7', color: '#166534', border: '1.5px solid #22c55e' }}
+                className="p-3 rounded-xl text-xs font-bold flex items-center gap-2"
+              >
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                <span>{resetSuccessNotice}</span>
               </div>
             )}
 
@@ -184,6 +187,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, stats }) => {
                       className="w-full pl-9 pr-3 py-2.5 text-sm font-bold rounded-xl focus:ring-2 focus:ring-blue-500 text-slate-900"
                     />
                   </div>
+                  <p className="mt-1 text-[11px] text-slate-500 font-medium">
+                    અધિકૃત એડમિન યુઝરનેમ: <strong className="text-blue-800">admin</strong>
+                  </p>
                 </div>
 
                 <div>
@@ -196,21 +202,30 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, stats }) => {
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="1234"
+                      placeholder="પાસવર્ડ દાખલ કરો"
                       style={{ backgroundColor: '#ffffff', border: '2px solid #cbd5e1' }}
                       className="w-full pl-9 pr-10 py-2.5 text-sm font-bold rounded-xl focus:ring-2 focus:ring-blue-500 text-slate-900"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1 cursor-pointer"
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
-                  <div className="mt-1 flex items-center justify-between text-[11px] text-slate-500">
-                    <span>ડેમો પાસવર્ડ: <strong className="text-blue-700 font-mono font-bold">1234</strong></span>
-                    <span className="text-emerald-700 font-bold">ઓટો-ભરેલ છે</span>
+
+                  {/* Forgot Password Link Button */}
+                  <div className="mt-2 flex items-center justify-between text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setIsForgotModalOpen(true)}
+                      className="text-blue-700 hover:text-blue-900 font-black hover:underline cursor-pointer flex items-center gap-1.5 transition-colors"
+                    >
+                      <KeyRound className="w-3.5 h-3.5 text-amber-600" />
+                      <span>પાસવર્ડ ભૂલી ગયા? (Forgot Password?)</span>
+                    </button>
+                    <span className="text-[11px] text-slate-500 font-bold">ડિફોલ્ટ: 1234</span>
                   </div>
                 </div>
               </div>
@@ -263,6 +278,19 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, stats }) => {
       <footer className="text-center text-xs text-slate-400 py-3">
         ગુજરાત રાજ્ય માર્ગ વાહન વ્યવહાર નિગમ (GSRTC) • સુરત વિભાગ
       </footer>
+
+      {/* Forgot / Reset Password Modal */}
+      {isForgotModalOpen && (
+        <ForgotPasswordModal
+          isOpen={isForgotModalOpen}
+          onClose={() => setIsForgotModalOpen(false)}
+          onPasswordResetSuccess={(newPass) => {
+            setPassword(newPass);
+            setResetSuccessNotice('🎉 પાસવર્ડ સફળતાપૂર્વક રીસેટ થયો! નવો પાસવર્ડ દાખલ થઈ ગયો છે, હવે લોગીન કરો.');
+            setError('');
+          }}
+        />
+      )}
     </div>
   );
 };
