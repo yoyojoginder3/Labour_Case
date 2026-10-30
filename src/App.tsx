@@ -31,6 +31,7 @@ import { ExcelUploadModal } from './components/ExcelUploadModal';
 import { NotificationModal } from './components/NotificationModal';
 import { LoginModal } from './components/LoginModal';
 import { LoginPage } from './components/LoginPage';
+import { exportStyledExcelWithLogo } from './utils/excelExport';
 import { Check, AlertCircle, Info, Plus, Download, Landmark, Scale, Gavel, Archive, ShieldCheck, Lock, Bell, MessageSquare, Smartphone, Pencil, FileSpreadsheet, UserCheck, Layers } from 'lucide-react';
 
 const TOTAL_COLUMNS = [
@@ -743,229 +744,18 @@ export default function App() {
     }
   };
 
-  // Helper to format worksheets for Legal Paper & Landscape Print
-  const setupWorksheetLegalLandscape = (ws: XLSX.WorkSheet, sheetName: SheetKey) => {
-    // 1. Page setup: Legal Paper Size (paperSize: 5 = Legal: 8.5 x 14 in), Landscape Orientation
-    ws['!pageSetup'] = {
-      orientation: 'landscape',
-      paperSize: 5, // 5 = Legal (8.5 x 14 inches)
-      fitToWidth: 1, // Fit all columns onto 1 page width
-      fitToHeight: 0, // Multi-page height
-      scale: 85
-    };
-
-    // 2. Margins (0.35 in for wide legal landscape spread)
-    ws['!margins'] = {
-      left: 0.35,
-      right: 0.35,
-      top: 0.45,
-      bottom: 0.45,
-      header: 0.25,
-      footer: 0.25
-    };
-
-    // 3. Merged banner row & custom column widths
-    if (sheetName === 'HC CASE') {
-      ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 10 } }];
-      ws['!cols'] = [
-        { wch: 6 },  // ક્રમ નં.
-        { wch: 11 }, // HCE ફાઈલ No.
-        { wch: 22 }, // નીચલી કોર્ટના ચુકાદા
-        { wch: 16 }, // SCA/LPA No.
-        { wch: 18 }, // એડવોકેટનું નામ
-        { wch: 28 }, // પક્ષકારનું નામ
-        { wch: 50 }, // કેસની ટૂંકી વિગત
-        { wch: 22 }, // પેપર્સ સુપ્રત તારીખ
-        { wch: 18 }, // વચગાળાના ચુકાદા
-        { wch: 18 }, // એફિડેવિટ તારીખ
-        { wch: 26 }  // કેસનું સ્ટેટસ
-      ];
-    } else if (sheetName === 'LABOUR CASE' || sheetName === 'IT CASE') {
-      ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }];
-      ws['!cols'] = [
-        { wch: 6 },  // ક્રમ નં.
-        { wch: 14 }, // રેફ. નંબર
-        { wch: 13 }, // લેબરકોર્ટ
-        { wch: 20 }, // એડવોકેટનું નામ
-        { wch: 26 }, // કર્મચારીનું નામ
-        { wch: 65 }, // કેસની ટૂંકી વિગત
-        { wch: 26 }  // હાલની પરિસ્થિતી
-      ];
-    } else if (sheetName === 'DISPOSED ARCHIVE') {
-      ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }];
-      ws['!cols'] = [
-        { wch: 6 },  // ક્રમ નં.
-        { wch: 14 }, // મૂળ કોર્ટ
-        { wch: 18 }, // કેસ નં.
-        { wch: 20 }, // એડવોકેટ
-        { wch: 26 }, // કર્મચારી
-        { wch: 55 }, // ટૂંકી વિગત
-        { wch: 24 }, // ચુકાદો તારીખ
-        { wch: 18 }  // પરિણામ
-      ];
-    }
-  };
-
-  // Export to Excel with distinct modes and Legal Landscape print setup
-  const handleExportExcel = (mode: 'all' | 'current' | 'pending' | 'disposed' | 'dossier' = 'all') => {
+  // Professional Excel Export with Executive Styling, Zebra Stripes, Freeze Panes, and Embedded Logo
+  const handleExportExcel = async (mode: 'all' | 'current' | 'pending' | 'disposed' | 'dossier' = 'all') => {
     try {
-      const wb = XLSX.utils.book_new();
-
-      if (mode === 'dossier') {
-        // Comprehensive Employee Service & Disciplinary Dossier Excel Export
-        const dossierRows: string[][] = [
-          [
-            'ગુજરાત રાજ્ય માર્ગ વાહન વ્યવહાર નિગમ (GSRTC) - સુરત વિભાગ • લેબર શાખા',
-            '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''
-          ],
-          [
-            'કર્મચારી સેવા, શિસ્તભંગ કાર્યવાહી અને નામદાર કોર્ટ પડતર કેસોની સંપૂર્ણ વિગતવાર Dossier યાદી',
-            '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''
-          ],
-          [
-            'ક્રમ નં.',
-            'કોર્ટ પ્રકાર',
-            'કેસ / SCA / રેફ. નં.',
-            'HCE / ફાઈલ નં.',
-            'નિગમના પેનલ એડવોકેટનું નામ',
-            'કર્મચારીનું નામ',
-            'જન્મ તારીખ',
-            'હોદ્દો / બેજ નં.',
-            'PF નં.',
-            'નોકરીમાં નિમણુકની તારીખ',
-            'નિવૃત્તિ તારીખ',
-            'ગુનાની વિગત',
-            'શિક્ષાત્મક હુકમ',
-            'પ્રથમ અપીલ',
-            'દ્વિતીય અપીલ',
-            'કેસની ટૂંકી વિગત',
-            'નીચલી કોર્ટ / વચગાળાનો ચુકાદો',
-            'હાલની છેલ્લામાં છેલ્લી પરિસ્થિતી / સ્ટેટસ',
-            'સુનાવણી તારીખ'
-          ]
-        ];
-
-        let serialCount = 1;
-        const allSheetKeys: SheetKey[] = ['HC CASE', 'LABOUR CASE', 'IT CASE', 'DISPOSED ARCHIVE'];
-
-        allSheetKeys.forEach((sKey) => {
-          const rows = data[sKey] || [];
-          for (let rIdx = 2; rIdx < rows.length; rIdx++) {
-            const row = rows[rIdx];
-            if (!row || !isValidCaseRow(row) || isHeaderRow(row)) continue;
-
-            const caseKey = getCaseKey(sKey, row, rIdx);
-            const savedProfile = employeeProfiles[caseKey] || extractInitialProfileFromRow(sKey, row);
-
-            const cols = detectSheetColumns(rows[1], sKey);
-            const isHC = sKey === 'HC CASE';
-            const isLabour = sKey === 'LABOUR CASE' || sKey === 'IT CASE';
-
-            const courtType = isHC ? 'હાઈકોર્ટ (HC)' : isLabour ? (sKey === 'LABOUR CASE' ? 'લેબર કોર્ટ' : 'ઔદ્યોગિક ટ્રિબ્યુનલ (IT)') : `નિકાલ (${row[1] || 'Disposed'})`;
-            const caseNo = (row[cols.caseNoCol] || row[1] || '-').trim();
-            const fileNo = cols.fileNoCol >= 0 ? (row[cols.fileNoCol] || '-') : '-';
-            const advocate = (row[cols.advCol] || '-').trim();
-            const status = (row[cols.statusCol] || row[row.length - 1] || '-').trim();
-            const hearingDate = extractDateFromStatus(status) || extractDateFromRow(row, cols.statusCol) || '-';
-            const lowerCourtOrder = cols.lowerCourtCol >= 0 ? (row[cols.lowerCourtCol] || '-') : (cols.courtCol >= 0 ? row[cols.courtCol] : '-');
-            const caseSummary = (row[cols.summaryCol] || '-').trim();
-            const partyName = (row[cols.empCol] || '').trim();
-
-            dossierRows.push([
-              serialCount.toString(),
-              courtType,
-              caseNo,
-              fileNo,
-              advocate,
-              savedProfile.employeeName || partyName || '-',
-              savedProfile.dob || '-',
-              savedProfile.designation || '-',
-              savedProfile.pfNo || '-',
-              savedProfile.appointmentDate || '-',
-              savedProfile.retirementDate || '-',
-              savedProfile.offenseDetails || caseSummary,
-              savedProfile.punishmentOrder || '-',
-              savedProfile.firstAppeal || '-',
-              savedProfile.secondAppeal || '-',
-              caseSummary,
-              lowerCourtOrder,
-              status,
-              hearingDate
-            ]);
-            serialCount++;
-          }
-        });
-
-        const ws = XLSX.utils.aoa_to_sheet(dossierRows);
-        ws['!merges'] = [
-          { s: { r: 0, c: 0 }, e: { r: 0, c: 18 } },
-          { s: { r: 1, c: 0 }, e: { r: 1, c: 18 } }
-        ];
-        ws['!cols'] = [
-          { wch: 6 },  // 1. ક્રમ નં.
-          { wch: 16 }, // 2. કોર્ટ પ્રકાર
-          { wch: 18 }, // 3. કેસ નં.
-          { wch: 12 }, // 4. ફાઈલ નં.
-          { wch: 20 }, // 5. એડવોકેટ
-          { wch: 26 }, // 6. કર્મચારી નામ
-          { wch: 14 }, // 7. જન્મ તારીખ
-          { wch: 18 }, // 8. હોદ્દો
-          { wch: 14 }, // 9. PF નં.
-          { wch: 16 }, // 10. નિમણુક તારીખ
-          { wch: 16 }, // 11. નિવૃત્તિ તારીખ
-          { wch: 45 }, // 12. ગુનાની વિગત
-          { wch: 28 }, // 13. શિક્ષાત્મક હુકમ
-          { wch: 24 }, // 14. પ્રથમ અપીલ
-          { wch: 24 }, // 15. દ્વિતીય અપીલ
-          { wch: 40 }, // 16. કેસની ટૂંકી વિગત
-          { wch: 24 }, // 17. નીચલી કોર્ટ ચુકાદો
-          { wch: 28 }, // 18. સ્ટેટસ
-          { wch: 15 }  // 19. સુનાવણી તારીખ
-        ];
-
-        XLSX.utils.book_append_sheet(wb, ws, 'કર્મચારી સેવા & કેસ Dossier');
-        XLSX.writeFile(wb, 'GSRTC_સુરત_કર્મચારી_સેવા_શિસ્ત_અને_કોર્ટ_કેસ_Dossier.xlsx');
-        showToast('📋 કર્મચારી સેવા & શિસ્ત વિગતો સાથે Dossier Excel સફળતાપૂર્વક ડાઉનલોડ થઈ!', 'success');
-        return;
-      }
-      if (mode === 'disposed') {
-        // Disposed Cases Separate Excel
-        const sheetData = data['DISPOSED ARCHIVE'] || [];
-        const ws = XLSX.utils.aoa_to_sheet(sheetData);
-        setupWorksheetLegalLandscape(ws, 'DISPOSED ARCHIVE');
-        XLSX.utils.book_append_sheet(wb, ws, 'DISPOSED CASES');
-        XLSX.writeFile(wb, 'GSRTC_સુરત_લેબર_શાખા_નિકાલ_થયેલ_કેસો_Disposed.xlsx');
-        showToast('📁 નિકાલ થયેલ કેસોની Legal Landscape Excel ફાઈલ ડાઉનલોડ થઈ!', 'success');
-      } else if (mode === 'pending') {
-        // Pending Cases Only (HC, Labour, IT)
-        (['HC CASE', 'LABOUR CASE', 'IT CASE'] as SheetKey[]).forEach((sheetName) => {
-          const sheetData = data[sheetName] || [];
-          const ws = XLSX.utils.aoa_to_sheet(sheetData);
-          setupWorksheetLegalLandscape(ws, sheetName);
-          XLSX.utils.book_append_sheet(wb, ws, sheetName);
-        });
-        XLSX.writeFile(wb, 'GSRTC_સુરત_લેબર_શાખા_પેન્ડિંગ_કેસો_Pending.xlsx');
-        showToast('🏛️ માત્ર પેન્ડિંગ કેસોની Legal Landscape Excel ફાઈલ ડાઉનલોડ થઈ!', 'success');
-      } else if (mode === 'current' && activeSheet !== 'SUMMARY' && activeSheet !== 'CALENDAR') {
-        // Current Active Sheet
-        const sheetData = data[activeSheet] || [];
-        const ws = XLSX.utils.aoa_to_sheet(sheetData);
-        setupWorksheetLegalLandscape(ws, activeSheet as SheetKey);
-        XLSX.utils.book_append_sheet(wb, ws, activeSheet);
-        XLSX.writeFile(wb, `GSRTC_સુરત_લેબર_શાખા_${activeSheet}_કેસો.xlsx`);
-        showToast(`📊 "${activeSheet}" Legal Landscape Excel ફાઈલ ડાઉનલોડ થઈ!`, 'success');
-      } else {
-        // Master Excel: All Sheets (HC, Labour, IT, Disposed Archive)
-        (['HC CASE', 'LABOUR CASE', 'IT CASE', 'DISPOSED ARCHIVE'] as SheetKey[]).forEach((sheetName) => {
-          const sheetData = data[sheetName] || [];
-          const ws = XLSX.utils.aoa_to_sheet(sheetData);
-          setupWorksheetLegalLandscape(ws, sheetName);
-          XLSX.utils.book_append_sheet(wb, ws, sheetName);
-        });
-        XLSX.writeFile(wb, 'GSRTC_સુરત_લેબર_શાખા_સંપૂર્ણ_માસ્ટર_એક્સેલ.xlsx');
-        showToast('📊 સંપૂર્ણ માસ્ટર Excel ફાઈલ (Legal Landscape બધી શીટ્સ) ડાઉનલોડ થઈ!', 'success');
-      }
-    } catch {
+      showToast('⏳ એક્સેલ ફાઈલ સુંદર ડિઝાઇન અને લોગો સાથે તૈયાર થઈ રહી છે...', 'info');
+      const filename = await exportStyledExcelWithLogo(data, employeeProfiles, {
+        mode,
+        activeSheet,
+        stats
+      });
+      showToast(`🎉 એક્સેલ ફાઈલ સફળતાપૂર્વક ડાઉનલોડ થઈ: ${filename}`, 'success');
+    } catch (err) {
+      console.error('Excel Export Error:', err);
       showToast('Excel ફાઈલ ડાઉનલોડ કરવામાં અડચણ આવી.', 'error');
     }
   };

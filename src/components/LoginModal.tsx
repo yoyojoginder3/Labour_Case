@@ -74,10 +74,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           className="p-5 sm:p-6 text-white text-center relative shrink-0"
         >
           <div 
-            style={{ backgroundColor: '#f59e0b', color: '#0f172a' }}
-            className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl mx-auto flex items-center justify-center font-black shadow-lg mb-2.5"
+            className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl mx-auto flex items-center justify-center bg-white p-1.5 shadow-xl ring-2 ring-amber-400/50 mb-2.5"
           >
-            <Scale className="w-7 h-7 sm:w-8 sm:h-8" />
+            <img
+              src="/assets/aistudio/transperant_logo_3_ef60ebcc.png"
+              alt="GSRTC સત્તાવાર પ્રતીક"
+              className="w-full h-full object-contain"
+            />
           </div>
           <span 
             style={{ backgroundColor: 'rgba(253,224,71,0.2)', color: '#fde047', border: '1px solid rgba(253,224,71,0.4)' }}

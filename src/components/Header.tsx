@@ -108,12 +108,11 @@ export const Header: React.FC<HeaderProps> = ({
       >
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 text-xs">
           <div className="flex items-center gap-2 min-w-0">
-            <span 
-              style={{ backgroundColor: '#f59e0b', color: '#0f172a' }}
-              className="inline-flex items-center justify-center w-6 h-6 sm:w-7 sm:h-7 rounded-lg font-black text-xs shadow-md shrink-0"
-            >
-              ST
-            </span>
+            <img 
+              src="/assets/aistudio/transperant_logo_3_ef60ebcc.png"
+              alt="GSRTC"
+              className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white p-0.5 shadow-md shrink-0 object-contain"
+            />
             <div className="truncate">
               <span style={{ color: '#fde047' }} className="font-extrabold tracking-wide text-xs sm:text-sm">
                 GSRTC સુરત વિભાગ • લેબર શાખા
@@ -196,14 +195,16 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* Main Top Bar - Responsive Layout for PC & Mobile */}
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2 sm:py-2.5 flex items-center justify-between gap-2 sm:gap-4">
-        {/* Brand Title */}
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div 
-            style={{ background: 'linear-gradient(135deg, #1d4ed8 0%, #4338ca 100%)' }}
-            className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl text-white flex items-center justify-center shadow-md ring-2 ring-blue-400/30 shrink-0"
-          >
-            <Scale className="w-5 h-5 text-amber-300 stroke-[2.5]" />
+        {/* Brand Title with Fixed Official Emblem */}
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-white shadow-md p-0.5 border border-slate-200 ring-2 ring-blue-500/20 shrink-0 flex items-center justify-center overflow-hidden">
+            <img
+              src="/assets/aistudio/transperant_logo_3_ef60ebcc.png"
+              alt="GSRTC Seal"
+              className="w-full h-full object-contain"
+            />
           </div>
+
           <div className="min-w-0">
             <h1 className="text-sm sm:text-base md:text-lg font-black text-slate-900 tracking-tight leading-tight truncate">
               નિગમના કેસોની સંપૂર્ણ વિગત

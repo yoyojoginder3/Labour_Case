@@ -66,8 +66,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, stats }) => {
       {/* Top Corporation Header */}
       <header className="max-w-5xl w-full mx-auto flex items-center justify-between py-3 border-b border-blue-900/60">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-black text-sm shadow-lg">
-            ST
+          <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-white p-1 shadow-lg ring-2 ring-amber-400/50 flex items-center justify-center shrink-0">
+            <img
+              src="/assets/aistudio/transperant_logo_3_ef60ebcc.png"
+              alt="GSRTC Seal"
+              className="w-full h-full object-contain"
+            />
           </div>
           <div>
             <h1 className="text-base sm:text-lg font-black text-amber-300 tracking-wide">
@@ -96,10 +100,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, stats }) => {
             className="p-6 text-white text-center"
           >
             <div 
-              style={{ backgroundColor: '#f59e0b', color: '#0f172a' }}
-              className="w-14 h-14 rounded-2xl mx-auto flex items-center justify-center font-black shadow-lg mb-3"
+              className="w-20 h-20 sm:w-22 sm:h-22 rounded-2xl mx-auto flex items-center justify-center bg-white p-1.5 shadow-2xl ring-4 ring-amber-400/40 mb-3"
             >
-              <Scale className="w-8 h-8" />
+              <img
+                src="/assets/aistudio/transperant_logo_3_ef60ebcc.png"
+                alt="GSRTC સત્તાવાર પ્રતીક"
+                className="w-full h-full object-contain"
+              />
             </div>
             <span 
               style={{ backgroundColor: 'rgba(253,224,71,0.2)', color: '#fde047', border: '1px solid rgba(253,224,71,0.4)' }}
