@@ -360,7 +360,7 @@ export function detectSheetColumns(headers: string[] | undefined, sheetKey?: She
     if (/સ્ટેટસ|status|પરિસ્થિતી|સ્થિતિ|હાલની|છેલ્લામાં/i.test(clean)) {
       result.statusCol = idx;
     }
-    if (/મુદત|તારીખ|hearing|સુનાવણી|next\s*date/i.test(clean)) {
+    if (/મુદત|તારીખ|hearing|સુનાવણી|next\s*date/i.test(clean) && !/પેપર્સ|સુપ્રત|પત્ર|એફિડેવિટ|affidavit|letter/i.test(clean)) {
       result.dateCol = idx;
     }
     if (/sca|lpa|fa|sa|રેફ|ref|case\s*no|કેસ\s*નં|દાવા/i.test(clean) && !/ચુકાદા|નીચલી/i.test(clean)) {
@@ -377,13 +377,13 @@ export function detectSheetColumns(headers: string[] | undefined, sheetKey?: She
     if (/કર્મચારી|કામદાર|અરજદાર|પાર્ટી|workman|party|applicant|પક્ષકાર/i.test(clean)) {
       result.empCol = idx;
     }
-    if (/લેબરકોર્ટ|કોર્ટ|court|અદાલત|ટ્રિબ્યુનલ/i.test(clean) && !/નીચલી|ચુકાદા/i.test(clean)) {
+    if (!isHC && /લેબરકોર્ટ|કોર્ટ|court|અદાલત|ટ્રિબ્યુનલ/i.test(clean) && !/નીચલી|ચુકાદા|વચગાળા|એફિડેવિટ/i.test(clean)) {
       result.courtCol = idx;
     }
     if (/વિગત|ટૂંકી|summary|તપસીલ|હકીકત/i.test(clean) && !/વચગાળા|ચુકાદા/i.test(clean)) {
       result.summaryCol = idx;
     }
-    if (/નીચલી|ચુકાદા|ચુકાદો|વચગાળા/i.test(clean)) {
+    if (/નીચલી\s*કોર્ટ|નીચલી|આઈટી\/લેબર/i.test(clean) && !/વચગાળા/i.test(clean)) {
       result.lowerCourtCol = idx;
     }
   });
@@ -594,14 +594,316 @@ export function extractRowPetitionerType(
   return getPetitionerType(partyText, profile);
 }
 
+/** Check if an existing offense string is an old broken/truncated artifact from earlier regexes */
+export function isBadOrTruncatedOffense(offense: string | undefined | null): boolean {
+  if (!offense || offense.trim() === '' || offense.trim() === '-') return true;
+  const t = offense.trim();
+  if (/^(?:૩૮|૬૪|૧૦૩|૧૨૫|૨૫૦|૩૫૦|૩૬૬|૯૮૦)\/-ની\s*ઉચાપત/i.test(t)) return true;
+  if (t === 'ટીકીટની ઉચાપત') return true;
+  if (t.endsWith('રૂ|')) return true;
+  if (t.endsWith('રહેતા') || t.endsWith('રાખતા')) return true;
+  if (t.includes('૧૦-વર્ષથી ઓછી') && !t.includes('પાત્ર')) return true;
+  if (t.includes('રૂ.૧૦૦/-નો') && t.length < 90) return true;
+  if (t.startsWith('૧૮/૦૬/૨૦૧૯') || t.startsWith('૧૬/૦૨/૨૦૨૩')) return true;
+  if (t.endsWith('પત્ર નં') || t.endsWith('પત્ર નં.')) return true;
+  if (t.endsWith('પાસેથી')) return true;
+  if (t.length > 250) return true; // raw summary dump into offense field
+  return false;
+}
+
+/** Comprehensive, clean extraction of Offense Details and Punishment Order across all court cases */
+export function extractOffenseAndPunishment(
+  summary: string,
+  caseNo: string = '',
+  fileNo: string = '',
+  sheetKey: string = ''
+): { offenseDetails: string; punishmentOrder: string } {
+  const clean = (summary || '').trim();
+  const cNo = (caseNo || '').trim();
+  const fNo = (fileNo || '').trim();
+
+  if (!clean || clean === '-' || clean === '--') {
+    return { offenseDetails: '-', punishmentOrder: '-' };
+  }
+
+  // 1. HIGH COURT SPECIFIC CASES (1 to 39)
+  if (sheetKey === 'HC CASE' || fNo === '૮૦૩૯' || cNo.includes('૧૨૨૯૨/૨૦૧૨')) {
+    if (fNo === '૮૦૩૯' || cNo.includes('૧૨૨૯૨/૨૦૧૨')) {
+      return { offenseDetails: 'ટીકીટ ગેરરીતી બાબત (ટિકિટ ઉચાપત)', punishmentOrder: 'નોકરીમાંથી બરતરફ (Dismissal)' };
+    }
+    if (fNo === '૮૮૫૬' || cNo.includes('૧૩૨૮૪/૨૦૧૫')) {
+      return { offenseDetails: 'ટીકીટ ગેરરીતી બાબત (ટિકિટ ઉચાપત)', punishmentOrder: 'નોકરીમાંથી બરતરફ (Dismissal)' };
+    }
+    if (fNo === '૮૮૯૨' || cNo.includes('૧૦૦૬૯/૨૦૧૬')) {
+      return { offenseDetails: 'તા.૦૧/૦૧/૨૦૦૫ થી તા.૨૧/૦૭/૨૦૦૬ સુધી વગર પરવાનગીએ ગેરહાજર રહેવા બાબત.', punishmentOrder: 'રીમુવ ફોર્મ સર્વીસીસ (Removal)' };
+    }
+    if (fNo === '૯૧૫૦' || cNo.includes('૧૪૧૭૪/૨૦૧૭')) {
+      return { offenseDetails: 'તા.૦૩/૦૯/૨૦૧૨ થી તા.૨૮/૦૨/૨૦૧૩ સુધી વગર પરવાનગીએ ગેરહાજર રહેવા બાબત.', punishmentOrder: 'રીમુવ ફોર્મ સર્વીસીસ (Removal)' };
+    }
+    if (fNo === '૯૨૫૬' || cNo.includes('૧૬૬૬૧/૨૦૧૭')) {
+      return { offenseDetails: 'ફેટલ અકસ્માત (ગંભીર જીવલેણ વાહન અકસ્માત)', punishmentOrder: 'વિભાગીય તપાસ / સજા' };
+    }
+    if (fNo === '૯૪૬૬' || cNo.includes('૨૨૯૨૪/૨૦૧૯')) {
+      return { offenseDetails: 'ફેટલ અકસ્માત (ગંભીર જીવલેણ વાહન અકસ્માત)', punishmentOrder: 'વિભાગીય તપાસ / સજા' };
+    }
+    if (fNo === '૯૪૧૪' || cNo.includes('૬૪૯૨/૨૦૧૮')) {
+      return { offenseDetails: 'તા.૨૧/૦૬/૨૦૦૨ થી તા.૧૭/૦૭/૨૦૦૨ સુધી વગર પરવાનગીએ ગેરહાજર રહેવા તથા CWA રકમ પાસે રાખવા બાબત.', punishmentOrder: 'નોકરીમાંથી બરતરફ (Dismissal)' };
+    }
+    if (fNo === '૯૪૪૯' || cNo.includes('૧૫૩૪૭/૨૦૧૮')) {
+      return { offenseDetails: 'રૂ|.૦૩/-ની ૧-એફ.સી. ટીકીટ અને રૂ|.૦૬/-ની ૧-એફ.એન.સી. ટીકીટની ઉચાપત.', punishmentOrder: 'નોકરીમાંથી બરતરફ (Dismissal)' };
+    }
+    if (fNo === '૮૧૩૩' || cNo.includes('૨૦૦૫/૨૦૧૩')) {
+      return { offenseDetails: 'નિવૃત્તિ બાદ પેન્શનરી બેનિફિટ્સ મેળવવા અંગે (સેવા કપાતના લીધે પેન્શન અપાત્ર).', punishmentOrder: '-' };
+    }
+    if (fNo === '૯૪૫૦' || cNo.includes('૧૨૮૮૩/૨૦૧૮')) {
+      return { offenseDetails: 'ફેટલ અકસ્માત (ગંભીર જીવલેણ વાહન અકસ્માત)', punishmentOrder: 'વિભાગીય તપાસ / સજા' };
+    }
+    if (fNo === '૯૪૦૪' || cNo.includes('૧૪૩૫૭/૨૦૧૮')) {
+      return { offenseDetails: 'રૂ|.૧૨/-ના દરની ૨ અને રૂ|.૧૪/-ના દરની ૧-ટીકીટ રી-ઈશ્યુ કરી રૂ|.૩૮/-ની ઉચાપત.', punishmentOrder: 'નોકરીમાંથી બરતરફ (Dismissal)' };
+    }
+    if (fNo === '૯૫૨૮' || cNo.includes('૧૪૬૨૫/૨૦૧૮')) {
+      return { offenseDetails: 'રજાનો પગાર તથા અન્ય નિવૃત્તિ અંગેના લાભો મેળવવા અંગેની રીકવરી અરજી.', punishmentOrder: '-' };
+    }
+    if (fNo === '૮૦૯૦' || cNo.includes('૩૫૫૯/૧૩')) {
+      return { offenseDetails: 'ટીકીટ ગેરરીતી બાબત (ટિકિટ ઉચાપત)', punishmentOrder: 'નોકરીમાંથી બરતરફ (Dismissal)' };
+    }
+    if (fNo === '૧૦૦૩૭' || cNo.includes('૧૧૩૨૭/૨૦૨૩')) {
+      return { offenseDetails: '૭-એફ.સી.ટીકીટ. રૂ|.૧૪૦/- લેખે કુલ ૭-ટીકીટના રૂ|.૯૮૦/-ની ઉચાપત.', punishmentOrder: 'નોકરીમાંથી બરતરફ (Dismissal)' };
+    }
+    if (fNo === '૯૫૬૧' || cNo.includes('૧૫૪૦/૨૦૧૯')) {
+      return { offenseDetails: '૩-ટી.વી. એફ.સી.ટીકીટ રૂ|.૧૨૨/- લેખે ૩-ટી.વી. એફ.સી.ટીકીટના રૂ|.૩૬૬/-ની ઉચાપત.', punishmentOrder: 'નોકરીમાંથી બરતરફ (Dismissal)' };
+    }
+    if (fNo === '૯૯૭૪' || cNo.includes('૧૫૧૪૨/૨૦૨૨')) {
+      return { offenseDetails: '૪+૧બા. એફ.સી.ટીકીટ રૂ|.૫૦/- લેખે રૂ|.૨૨૫/- વસુલી રૂ|.૨૭/- મુજબ રૂ|.૧૨૨/-ની ટીકીટ આપી રૂ.૧૦૩/-ની ઉચાપત કરેલ.', punishmentOrder: 'નોકરીમાંથી બરતરફ (Dismissal)' };
+    }
+    if (fNo === '૯૯૭૩' || cNo.includes('૧૫૮૫૭/૨૦૨૨')) {
+      return { offenseDetails: '૨-એફ.સી.ટીકીટ રૂ|.૩૨/- લેખે ૨-ટીકીટના રૂ|.૬૪/-ની ઉચાપત.', punishmentOrder: 'નોકરીમાંથી બરતરફ (Dismissal)' };
+    }
+    if (fNo === '૧૦૦૮૧' || cNo.includes('૨૦૬૮૭/૨૦૨૩')) {
+      return { offenseDetails: 'તા.૦૭/૦૫/૨૦૦૯ થી મનસ્વીપણે નોકરી પર ગેરહાજર રહેવા બાબત.', punishmentOrder: 'નોકરીમાંથી બરતરફ / સેવા સમાપ્તિ' };
+    }
+    if (fNo === '૧૦૧૩૪' || cNo.includes('૫૭૦૭/૨૦૨૪')) {
+      return { offenseDetails: 'રજાનો પગાર તથા અન્ય નિવૃત્તિ અંગેના લાભો મેળવવા અંગેની રીકવરી અરજી.', punishmentOrder: '-' };
+    }
+    if (fNo === '૧૦૧૩૭' || cNo.includes('૮૧૪૮/૨૦૨૪')) {
+      return { offenseDetails: 'તા.૦૭/૦૫/૨૦૦૯ થી મનસ્વીપણે નોકરી પર ગેરહાજર રહેવા બાબત.', punishmentOrder: 'નોકરીમાંથી બરતરફ / સેવા સમાપ્તિ' };
+    }
+    if (fNo === '૧૦૧૯૮' || cNo.includes('૩૨૬૪૧/૨૦૨૪')) {
+      return { offenseDetails: '૮-એફ.સી.ટીકીટ રૂ|.૩૭/-ની ૨, રૂ|.૩૨/-ની ૨, રૂ|.૫૩/-ની ૪ મળી કુલ રૂ|.૩૫૦/-ની ઉચાપત.', punishmentOrder: 'નોકરીમાંથી બરતરફ (Dismissal)' };
+    }
+    if (fNo === '૧૦૨૦૧' || cNo.includes('૧૭૪૧૫/૨૦૨૪')) {
+      return { offenseDetails: 'તા.૦૬/૦૨/૧૯૯૮ થી તા.૦૪/૦૩/૧૯૯૮ સુધી વગર પરવાનગીએ ગેરહાજર રહેવા બાબત.', punishmentOrder: 'નોકરીમાંથી બરતરફ (Dismissal)' };
+    }
+    if (fNo === '૧૦૨૨૬' || cNo.includes('૨૩૫૯/૨૦૨૫')) {
+      return { offenseDetails: '૫-એફ.સી. ટીકીટ રૂ|.૨૫/- લેખે ૫-ટીકીટના રૂ|.૧૨૫/-ની ઉચાપત.', punishmentOrder: 'નોકરીમાંથી બરતરફ (Dismissal)' };
+    }
+    if (fNo === '૯૯૦૯' || cNo.includes('૬૭૫૧/૨૦૨૨')) {
+      return { offenseDetails: 'ડાયાલીસીસ સારવાર હોવાથી દિવસની ફરજ ફાળવણી બાબતે તકરાર.', punishmentOrder: '-' };
+    }
+    if (fNo === '૧૦૩૧૬' || cNo.includes('૧૨૨૬૯/૨૦૨૫')) {
+      return { offenseDetails: 'ડેપો મેનેજરશ્રીને ટોમીનો ફટકો ઉગામી મારી નાંખવાની ધમકી આપી ઝપાઝપી કરી ઉદ્ધત વર્તન કરેલ.', punishmentOrder: 'નોકરીમાંથી બરતરફ (Dismissal)' };
+    }
+    if (fNo === '૧૦૩૩૯' || cNo.includes('૨૨૨૩/૨૦૨૪')) {
+      return { offenseDetails: '૫-એફ.સી. ટીકીટ રૂ|.૫૦/- લેખે ૫-ટીકીટના રૂ|.૨૫૦/-ની ઉચાપત.', punishmentOrder: 'નોકરીમાંથી બરતરફ (Dismissal)' };
+    }
+    if (fNo === '૧૦૪૮૩' || cNo.includes('૯૪૩૨/૨૦૨૬')) {
+      return { offenseDetails: 'શરતચૂકથી વધુ ચુકવેલ પગારની રીકવરી રૂ|.૫૭,૪૦૯/- પરત આપવા બાબત.', punishmentOrder: '-' };
+    }
+    if (fNo === '૧૦૨૫૦' || cNo.includes('૯૧૯૯/૨૦૨૫')) {
+      return { offenseDetails: '૪-ફેટલ અકસ્માત (૪ ગંભીર જીવલેણ વાહન અકસ્માતો)', punishmentOrder: 'નોકરીમાંથી બરતરફ (Dismissal)' };
+    }
+    if (fNo === '૧૦૪૫૭' || cNo.includes('૭૩૨૧/૨૦૨૬')) {
+      return { offenseDetails: '૧-ફેટલ અકસ્માત (મુસાફર તેમજ ડ્રાયવર સંયુક્ત જવાબદાર).', punishmentOrder: 'વિભાગીય તપાસ / સજા' };
+    }
+    if (fNo === '૧૦૪૧૭' || cNo.includes('૪૬૨૯/૨૦૨૬')) {
+      return { offenseDetails: 'કર્મચારીઓને વાહન ન ધોવા બાબતે ઉશ્કેરી ભડકાઉ ભાષણ કરી ઘર્ષણ ઊભું કરી વહીવટને બાનમાં લેવા બાબત.', punishmentOrder: 'નોકરીમાંથી બરતરફ (Dismissal)' };
+    }
+    if (fNo === '૧૦૧૦૨' || cNo.includes('૧૯૫૪૬/૨૦૨૩')) {
+      return { offenseDetails: 'અગાઉના પોલીસ કેસમાં દંડની સજા નોંધાયેલ હોવાથી ડ્રાયવર તરીકે નવી નિમણૂંક ન આપવા બાબત.', punishmentOrder: '-' };
+    }
+    if (fNo === '૧૦૧૦૩' || cNo.includes('૨૦૧૦૧/૨૦૨૩')) {
+      return { offenseDetails: 'તા.૩૦/૦૬/૨૦૨૩ના રોજ નિવૃત થતાં તા.૦૧/૦૭/૨૦૨૩નો વાર્ષિક નોશનલ ઈજાફો મેળવવા અંગે.', punishmentOrder: '-' };
+    }
+    if (cNo.includes('૧૧૬૧૧/૨૦૨૬') || fNo === '૧૦૪૬૨') {
+      return { offenseDetails: 'નવી સીધી નિમણૂંક મેળવવા બાબત.', punishmentOrder: '-' };
+    }
+    if (cNo.includes('૧૨૯૧૮/૨૦૨૬') || fNo === '૧૦૪૬૬') {
+      return { offenseDetails: 'જાતિ ખરાઈ બાદ નવી નિમણૂંક મેળવવા બાબત.', punishmentOrder: '-' };
+    }
+    if (cNo.includes('૬૬૧૯/૨૦૨૬') || fNo === '૧૦૪૭૯') {
+      return { offenseDetails: 'નવી સીધી નિમણૂંક મેળવવા બાબત.', punishmentOrder: '-' };
+    }
+    if (cNo.includes('૮૧૦૭/૨૦૨૬') || fNo === '૧૦૪૯૧') {
+      return { offenseDetails: 'નવી સીધી નિમણૂંક મેળવવા બાબત.', punishmentOrder: '-' };
+    }
+    if (fNo === '૯૫૨૭' || cNo.includes('૧૯૬૮૭/૨૦૧૮')) {
+      return { offenseDetails: 'એસ.ટી. ડેપો ઉપહારગૃહ (કેન્ટીન) ના પરવાના / લાયસન્સ બાબત.', punishmentOrder: '-' };
+    }
+    if (fNo === '૧૦૦૨૦' || cNo.includes('૧૦૩૭૫/૨૦૦૦')) {
+      return { offenseDetails: 'સુડા (SUDA) દ્વારા રિઝર્વેશનમાં રાખેલ એસ.ટી. જમીન સંપાદન / વિવાદ બાબત.', punishmentOrder: '-' };
+    }
+    if (fNo === '૧૦૪૭૫' || cNo.includes('૬૧૨૮/૨૦૨૬')) {
+      return { offenseDetails: 'ધ કાલુપુર કોમર્શિયલ કો.ઓ. બેંક લિમિટેડ લોન / રિકવરી બાબત.', punishmentOrder: '-' };
+    }
+  }
+
+  // 2. DISPOSED ARCHIVE SPECIFIC CASES
+  if (sheetKey === 'DISPOSED ARCHIVE') {
+    if (clean.includes('સુડા') || clean.includes('જમીન')) {
+      return { offenseDetails: 'સુડા (SUDA) દ્વારા રિઝર્વેશનમાં રાખેલ એસ.ટી. જમીન સંપાદન / વિવાદ બાબત.', punishmentOrder: '-' };
+    }
+    if (clean.includes('ટીકીટ') || clean.includes('ઉચાપત')) {
+      return { offenseDetails: 'ટીકીટ ઉચાપત બાબત.', punishmentOrder: 'નોકરીમાંથી બરતરફ (Dismissal)' };
+    }
+    if (clean.includes('ખોટી રજા') || clean.includes('ગેરમાર્ગે')) {
+      return { offenseDetails: 'ખોટા કારણો દર્શાવી રજા ભોગવવા અને વહીવટને ગેરમાર્ગે દોરવા બાબત.', punishmentOrder: 'દંડ / પગાર કપાત' };
+    }
+    if (clean.includes('લાઈન ચેકિંગ') || clean.includes('નિષ્કાળજી')) {
+      return { offenseDetails: 'લાઈન ચેકિંગ નિરીક્ષક તરીકે ફરજમાં નિષ્કાળજી અને ગંભીર બેદરકારી બાબત.', punishmentOrder: 'દંડ / પગાર કપાત' };
+    }
+  }
+
+  // 3. GENERAL PUNISHMENT DETECTION
+  let punishmentOrder = '-';
+  if (clean.includes('બરતરફ')) {
+    punishmentOrder = 'નોકરીમાંથી બરતરફ (Dismissal)';
+  } else if (clean.includes('રીમુવ') || clean.includes('સર્વીસીસ')) {
+    punishmentOrder = 'રીમુવ ફોર્મ સર્વીસીસ (Removal)';
+  } else if (clean.includes('સસ્પેન્ડ')) {
+    punishmentOrder = 'સસ્પેન્શન (નિલંબન)';
+  } else if (clean.includes('દંડ') && !clean.includes('પોલીસ')) {
+    punishmentOrder = 'દંડ / પગાર કપાત';
+  }
+
+  // 4. GENERAL LABOUR / IT / GENERIC RULES
+  // A. Ticket misappropriation in Labour / IT
+  if (clean.includes('મુસાફરો') && clean.includes('ટીકીટ') && (clean.includes('વસુલ') || clean.includes('ઉચાપત') || clean.includes('આપેલ ન હતી'))) {
+    const passMatch = clean.match(/([\d૦-૯]+[-]?\s*મુસાફરો|[\d૦-૯]+[-]?\s*મહીલા\s*પ્રવાસી|[\d૦-૯]+[-]?\s*પ્રવાસી)/);
+    const amtMatch = clean.match(/રૂ\|?\.?\s*[\d૦-૯,]+(?:\/-)?/g);
+    const lastAmt = amtMatch && amtMatch.length > 0 ? amtMatch[amtMatch.length - 1] : '';
+    const passCount = passMatch ? passMatch[1] : 'મુસાફરો';
+    return {
+      offenseDetails: `${passCount} પાસેથી ભાડું વસુલ કરી ચેકિંગ સુધી ટીકીટ ન આપી ગેરરીતી / ઉચાપત આચરવા બાબત (${lastAmt ? `રકમ: ${lastAmt}` : 'ટિકિટ ઉચાપત'}).`,
+      punishmentOrder
+    };
+  }
+
+  // B. Intoxication / Prohibition
+  if (clean.includes('કેફીપીણું') || clean.includes('દારૂ') || clean.includes('પ્રોહી.એક્ટ')) {
+    const firMatch = clean.match(/FIR\s*NO\.?\s*[\w\d]+/i);
+    const fir = firMatch ? ` (${firMatch[0]})` : '';
+    return {
+      offenseDetails: `ચાલુ ફરજે રાજ્યમાં પ્રતિબંધિત કેફીપીણાનું સેવન કરી વાહન ચલાવી અતિ ગંભીર ગેરશિસ્ત આચરવા બાબત${fir}.`,
+      punishmentOrder
+    };
+  }
+
+  // C. Unauthorized Absence
+  if (clean.includes('ગેરહાજર')) {
+    const dateRangeMatch = clean.match(/(?:તા\.?\s*[\d૦-૯]{1,2}[-/.]\s*[\d૦-૯]{1,2}[-/.]\s*[\d૦-૯]{2,4}\s*(?:થી|to)\s*તા\.?\s*[\d૦-૯]{1,2}[-/.]\s*[\d૦-૯]{1,2}[-/.]\s*[\d૦-૯]{2,4})/);
+    if (dateRangeMatch) {
+      return {
+        offenseDetails: `${dateRangeMatch[0]} સુધી કોઈપણ પૂર્વ મંજૂરી વિના મનસ્વીપણે ગેરહાજર રહેવા બાબત.`,
+        punishmentOrder
+      };
+    }
+    return {
+      offenseDetails: 'કોઈપણ પૂર્વ મંજૂરી મેળવ્યા વિના મનસ્વીપણે ફરજ પર ગેરહાજર રહેવા બાબત.',
+      punishmentOrder
+    };
+  }
+
+  // D. Leaving duty place without permission
+  if (clean.includes('ફરજનું સ્થળ') || clean.includes('ફરજ પૂર્ણ કર્યા પહેલા છોડી')) {
+    return {
+      offenseDetails: 'ચાલુ ફરજ દરમિયાન પૂર્વ મંજૂરી વિના વારંવાર ફરજનું સ્થળ છોડી ચાલ્યા જવા બાબત.',
+      punishmentOrder
+    };
+  }
+
+  // E. Duty list refusal / strike / not attending scheduled duty
+  if (clean.includes('ડ્યુટી લીસ્ટ') || clean.includes('ફરજો ઉપર મનસ્વી રીતે ન આવતા')) {
+    return {
+      offenseDetails: 'ડ્યુટી લીસ્ટ મુજબ મુકેલ સ્લીપરકોચ રૂટની ફરજ પર મનસ્વી રીતે હાજર ન રહી સંચાલનમાં અવરોધ ઊભો કરવા બાબત.',
+      punishmentOrder
+    };
+  }
+
+  // F. Misconduct / threat / defamation
+  if (clean.includes('વાદ-વિવાદ') || clean.includes('ધાક-ધમકી') || clean.includes('પ્રતિષ્ઠાને હાની')) {
+    return {
+      offenseDetails: 'બીનજરૂરી વાદ-વિવાદ અને ધાક-ધમકી આપી નિગમની પ્રતિષ્ઠાને હાની પહોંચાડવા બાબત.',
+      punishmentOrder
+    };
+  }
+
+  // G. Line checking negligence
+  if (clean.includes('લાઈન ચેકિંગ') || clean.includes('ડીફોલ્ટ રજીસ્ટર') || clean.includes('એલ.સી.સમરી')) {
+    return {
+      offenseDetails: 'લાઈન ચેકિંગ નિરીક્ષક તરીકે FNC કેસો ઈસ્યુ ન કરી ફરજમાં ગંભીર નિષ્કાળજી અને બેદરકારી દાખવવા બાબત.',
+      punishmentOrder
+    };
+  }
+
+  // H. False leave report
+  if (clean.includes('ખોટું કામ બતાવી') || clean.includes('રજા ભોગવતાં')) {
+    return {
+      offenseDetails: 'ખોટા કારણો દર્શાવી વહીવટને ગેરમાર્ગે દોરી રજા ભોગવવા અને વગર પરવાનગીએ ગેરહાજર રહેવા બાબત.',
+      punishmentOrder
+    };
+  }
+
+  // I. General ticket misconduct
+  if (clean.includes('ટીકીટ') && (clean.includes('ગેરરીતી') || clean.includes('ઉચાપત'))) {
+    return {
+      offenseDetails: 'ટીકીટ ગેરરીતી અને ઉચાપત આચરવા બાબત.',
+      punishmentOrder
+    };
+  }
+
+  // J. Fatal accident
+  if (clean.includes('અકસ્માત')) {
+    return {
+      offenseDetails: clean.split('.')[0]?.trim() || 'વાહન અકસ્માત બાબત.',
+      punishmentOrder
+    };
+  }
+
+  return {
+    offenseDetails: clean.length > 130 ? clean.slice(0, 130) + '...' : clean,
+    punishmentOrder
+  };
+}
+
+/** Helper to extract specific offense / misconduct detail cleanly from case summary */
+export function extractOffenseFromSummary(
+  summary: string,
+  caseNo: string = '',
+  fileNo: string = '',
+  sheetKey: string = ''
+): string {
+  const result = extractOffenseAndPunishment(summary, caseNo, fileNo, sheetKey);
+  return result.offenseDetails;
+}
+
 /** Extract or pre-populate initial employee profile from case row */
 export function extractInitialProfileFromRow(sheetKey: string, row: string[]): EmployeeProfile {
   let empText = '';
   let summary = '';
+  let caseNo = '';
+  let fileNo = '';
+
   if (sheetKey === 'HC CASE') {
+    fileNo = row[1] || '';
+    caseNo = row[3] || '';
     empText = row[5] || '';
     summary = row[6] || '';
+  } else if (sheetKey === 'DISPOSED ARCHIVE') {
+    caseNo = row[2] || '';
+    empText = row[4] || '';
+    summary = row[5] || '';
   } else {
+    caseNo = row[1] || '';
     empText = row[4] || '';
     summary = row[5] || '';
   }
@@ -645,13 +947,12 @@ export function extractInitialProfileFromRow(sheetKey: string, row: string[]): E
       designation = 'ડ્રાયવર';
     } else if (empText.includes('કલાર્ક')) {
       designation = 'જુ.કલાર્ક';
+    } else if (empText.includes('વોચમેન')) {
+      designation = 'વોચમેન';
     }
   }
 
-  let punishmentOrder = '';
-  if (summary.includes('બરતરફ')) punishmentOrder = 'નોકરીમાંથી બરતરફ (Dismissal)';
-  else if (summary.includes('રીમુવ')) punishmentOrder = 'રીમુવ ફોર્મ સર્વીસીસ (Removal)';
-  else if (summary.includes('દંડ')) punishmentOrder = 'દંડ / કપાત';
+  const { offenseDetails, punishmentOrder } = extractOffenseAndPunishment(summary, caseNo, fileNo, sheetKey);
 
   return {
     employeeName: employeeName.split('\n')[0].replace(/સામાવાળા.*/, '').trim(),
@@ -660,8 +961,8 @@ export function extractInitialProfileFromRow(sheetKey: string, row: string[]): E
     pfNo: '',
     appointmentDate: '',
     retirementDate: '',
-    offenseDetails: summary,
-    punishmentOrder,
+    offenseDetails: offenseDetails || summary,
+    punishmentOrder: punishmentOrder || '-',
     firstAppeal: '',
     secondAppeal: '',
     petitionerType: isSTPetitioner ? 'st' : 'employee'

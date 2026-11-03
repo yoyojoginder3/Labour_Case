@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { SheetKey, EmployeeProfile } from '../types/case';
-import { getStatusCategory, extractDateFromStatus, extractInitialProfileFromRow } from '../data/initialData';
+import { getStatusCategory, extractDateFromStatus, extractInitialProfileFromRow, isBadOrTruncatedOffense } from '../data/initialData';
 import { DatePickerField } from './DatePickerField';
 import { 
   X, 
@@ -50,14 +50,25 @@ export const CaseDetailModal: React.FC<CaseDetailModalProps> = ({
   const [activeTab, setActiveTab] = useState<'case' | 'dossier'>('case');
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<string[]>(rowData || []);
-  const [profileData, setProfileData] = useState<EmployeeProfile>(() => {
-    return employeeProfile || extractInitialProfileFromRow(sheetKey, rowData || []);
-  });
+  const getInitialOrCleanProfile = (): EmployeeProfile => {
+    const fresh = extractInitialProfileFromRow(sheetKey, rowData || []);
+    if (!employeeProfile) return fresh;
+    const merged = { ...employeeProfile };
+    if (isBadOrTruncatedOffense(merged.offenseDetails)) {
+      merged.offenseDetails = fresh.offenseDetails;
+    }
+    if (!merged.punishmentOrder || merged.punishmentOrder === '-') {
+      merged.punishmentOrder = fresh.punishmentOrder;
+    }
+    return merged;
+  };
+
+  const [profileData, setProfileData] = useState<EmployeeProfile>(getInitialOrCleanProfile);
   const [copied, setCopied] = useState(false);
 
   React.useEffect(() => {
     setFormData(rowData || []);
-    setProfileData(employeeProfile || extractInitialProfileFromRow(sheetKey, rowData || []));
+    setProfileData(getInitialOrCleanProfile());
     setIsEditing(false);
     setActiveTab('case');
   }, [rowData, employeeProfile, sheetKey]);

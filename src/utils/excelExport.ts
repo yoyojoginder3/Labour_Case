@@ -1,7 +1,15 @@
 import ExcelJS from 'exceljs';
 import { SheetKey, SheetDataMap, EmployeeProfileMap } from '../types/case';
 import { OFFICIAL_GSRTC_LOGO_BASE64 } from './officialLogo';
-import { extractDateFromStatus, extractDateFromRow, detectSheetColumns } from '../data/initialData';
+import { 
+  extractDateFromStatus, 
+  extractDateFromRow, 
+  detectSheetColumns, 
+  getCaseKey, 
+  extractInitialProfileFromRow, 
+  extractOffenseFromSummary,
+  isBadOrTruncatedOffense
+} from '../data/initialData';
 
 export interface ExcelExportOptions {
   mode: 'all' | 'current' | 'pending' | 'disposed' | 'dossier';
@@ -363,33 +371,131 @@ export async function exportStyledExcelWithLogo(
         const row = rows[rIdx];
         if (!row || !row[0] || row[0] === 'ક્રમ નં.') continue;
 
-        const caseKey = `${sKey}_${rIdx}_${row[1] || ''}`;
-        const profile = employeeProfiles[caseKey] || {
-          employeeName: '',
-          dob: '',
-          designation: '',
-          pfNo: '',
-          appointmentDate: '',
-          retirementDate: '',
-          offenseDetails: '',
-          punishmentOrder: '',
-          firstAppeal: '',
-          secondAppeal: ''
-        };
-
         const isHC = sKey === 'HC CASE';
         const isLabour = sKey === 'LABOUR CASE' || sKey === 'IT CASE';
-        const courtType = isHC ? 'હાઈકોર્ટ (HC)' : isLabour ? (sKey === 'LABOUR CASE' ? 'લેબર કોર્ટ' : 'ઔદ્યોગિક ટ્રિબ્યુનલ (IT)') : `નિકાલ (${row[1] || 'Disposed'})`;
+        const isArchive = sKey === 'DISPOSED ARCHIVE';
 
-        const caseNo = (isHC ? row[3] : row[1]) || '-';
-        const fileNo = isHC ? (row[1] || '-') : '-';
-        const advocate = (isHC ? row[4] : row[3]) || '-';
-        const employeeName = profile.employeeName || (isHC ? row[5] : row[4]) || '-';
-        const caseSummary = (isHC ? row[6] : row[5]) || '-';
+        // Precise Profile Lookup matching getCaseKey used throughout the app
+        const caseKey = getCaseKey(sKey, row, rIdx);
+        const storedProfile = employeeProfiles[caseKey] || Object.values(employeeProfiles || {}).find(p => 
+          (p.employeeName && row.some(cell => typeof cell === 'string' && cell.includes(p.employeeName))) ||
+          (p.pfNo && row.some(cell => typeof cell === 'string' && cell.includes(p.pfNo)))
+        );
+        const initialProfile = extractInitialProfileFromRow(sKey, row);
+        const profile = storedProfile || initialProfile;
+
+        // Court Type Label
+        let courtType = isHC ? 'હાઈકોર્ટ (HC)' : isLabour ? (sKey === 'LABOUR CASE' ? 'લેબર કોર્ટ' : 'ઔદ્યોગિક ટ્રિબ્યુનલ (IT)') : `નિકાલ (${row[1] || 'Disposed'})`;
+        if (isArchive) {
+          const origCourt = row[1] || 'Disposed';
+          courtType = `નિકાલ (${origCourt === 'HC CASE' ? 'હાઈકોર્ટ' : origCourt === 'LABOUR CASE' ? 'લેબર કોર્ટ' : origCourt === 'IT CASE' ? 'ઔદ્યોગિક' : origCourt})`;
+        }
+
+        // Case Number
+        let caseNo = '-';
+        if (isArchive) {
+          caseNo = row[2] || '-';
+        } else if (cols.caseNoCol >= 0 && row[cols.caseNoCol]) {
+          caseNo = row[cols.caseNoCol].trim();
+        } else {
+          caseNo = (isHC ? row[3] : row[1]) || '-';
+        }
+
+        // HCE / File Number
+        let fileNo = '-';
+        if (isHC) {
+          fileNo = (cols.fileNoCol >= 0 && row[cols.fileNoCol]) ? row[cols.fileNoCol].trim() : (row[1] || '-');
+        } else if (isArchive && row[2] && row[2].includes('ફાઈલ:')) {
+          fileNo = row[2].split('ફાઈલ:')[1]?.replace(/[)\]]/g, '').trim() || '-';
+        }
+
+        // Panel Advocate
+        let advocate = '-';
+        if (isArchive) {
+          advocate = row[3] || '-';
+        } else if (cols.advCol >= 0 && row[cols.advCol]) {
+          advocate = row[cols.advCol].trim();
+        } else {
+          advocate = (isHC ? row[4] : row[3]) || '-';
+        }
+
+        // Employee Name
+        const applicantRaw = isArchive 
+          ? (row[4] || '') 
+          : (cols.empCol >= 0 && row[cols.empCol]) 
+          ? row[cols.empCol] 
+          : (isHC ? row[5] : row[4]) || '';
+
+        let employeeName = profile.employeeName;
+        if (!employeeName || employeeName === '-') {
+          if (applicantRaw) {
+            if (applicantRaw.includes('અરજદારઃ-')) {
+              employeeName = applicantRaw.split('અરજદારઃ-')[1].split('(')[0].replace(/સામાવાળા.*/, '').trim();
+            } else {
+              employeeName = applicantRaw.split('\n')[0].replace(/સામાવાળા.*/, '').trim();
+            }
+          }
+        }
+        if (!employeeName) employeeName = '-';
+
+        // Designation
+        let designation = profile.designation;
+        if (!designation || designation === '-') {
+          if (applicantRaw.includes('કંડ')) designation = 'કંડકટર';
+          else if (applicantRaw.includes('ડ્રાય')) designation = 'ડ્રાયવર';
+          else if (applicantRaw.includes('કલાર્ક')) designation = 'જુ.કલાર્ક';
+          else if (applicantRaw.includes('વોચમેન')) designation = 'વોચમેન';
+          else designation = '-';
+        }
+
+        // Raw Case Summary from the row
+        let rawSummary = '-';
+        if (isArchive) {
+          rawSummary = row[5] || '-';
+        } else if (cols.summaryCol >= 0 && row[cols.summaryCol]) {
+          rawSummary = row[cols.summaryCol].trim();
+        } else {
+          rawSummary = (isHC ? row[6] : row[5]) || '-';
+        }
+
+        // 1. ગુનાની વિગત (Offense / Misconduct Details):
+        // Prioritize genuine user-entered offenseDetails in profile, otherwise or if old truncated string, extract clean offense
+        let offenseDetails = '-';
+        if (profile.offenseDetails && !isBadOrTruncatedOffense(profile.offenseDetails)) {
+          offenseDetails = profile.offenseDetails.trim();
+        } else {
+          offenseDetails = initialProfile.offenseDetails || extractOffenseFromSummary(rawSummary, caseNo, fileNo, sKey);
+        }
+
+        // 2. શિક્ષાત્મક હુકમ (Punishment Order):
+        let punishmentOrder = '-';
+        if (profile.punishmentOrder && profile.punishmentOrder !== '-' && profile.punishmentOrder.trim() !== '') {
+          punishmentOrder = profile.punishmentOrder.trim();
+        } else {
+          punishmentOrder = initialProfile.punishmentOrder || '-';
+        }
+
+        // 3. કેસની ટૂંકી વિગત (Case Summary Details):
+        // The complete, clear case summary description
+        const caseSummary = rawSummary && rawSummary.trim() !== '' ? rawSummary.trim() : '-';
+
+        // 4. નીચલી કોર્ટ ચુકાદો (Lower Court Order):
+        let lowerCourt = '-';
+        if (isHC) {
+          // Row 2 is "આઈટી/લેબર/WC/ગ્રેજ્યુ/ દિ.દાવા/ક્રીમી. તથા અન્ય નીચલી કોર્ટના ચુકાદા"
+          lowerCourt = (row[2] && row[2].trim() && row[2] !== '--') ? row[2].trim() : '-';
+          // Also append interim order from row[8] if present
+          if (row[8] && row[8].trim() && row[8] !== '-' && row[8] !== '--') {
+            lowerCourt = lowerCourt !== '-' ? `${lowerCourt} | વચગાળા: ${row[8].trim()}` : `વચગાળા: ${row[8].trim()}`;
+          }
+        } else if (isLabour) {
+          lowerCourt = (cols.courtCol >= 0 && row[cols.courtCol]) ? row[cols.courtCol].trim() : (row[2] || 'સુરત');
+        } else if (isArchive) {
+          lowerCourt = row[6] || '-';
+        }
+
+        // Extract Status and Hearing Date
         const rawStatus = (row[cols.statusCol] || row[row.length - 1] || '-').trim();
-        const lowerCourt = isHC ? (row[2] || '-') : (row[2] || 'સુરત');
-
-        // Extract BOTH Status and Hearing Date
         const statusDateInfo = extractCleanStatusAndDate(rawStatus);
         const fallbackDate = extractDateFromRow(row, cols.statusCol);
         const finalHearingDate = statusDateInfo.date !== '-' ? statusDateInfo.date : (fallbackDate || '-');
@@ -402,12 +508,12 @@ export async function exportStyledExcelWithLogo(
           advocate,
           employeeName,
           profile.dob || '-',
-          profile.designation || '-',
+          designation,
           profile.pfNo || '-',
           profile.appointmentDate || '-',
           profile.retirementDate || '-',
-          profile.offenseDetails || caseSummary,
-          profile.punishmentOrder || '-',
+          offenseDetails,
+          punishmentOrder,
           profile.firstAppeal || '-',
           profile.secondAppeal || '-',
           caseSummary,

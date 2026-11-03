@@ -16,7 +16,8 @@ import {
   getCaseKey,
   extractInitialProfileFromRow,
   getPetitionerType,
-  extractRowPetitionerType
+  extractRowPetitionerType,
+  isBadOrTruncatedOffense
 } from './data/initialData';
 import { Header } from './components/Header';
 import { FiltersBar } from './components/FiltersBar';
@@ -48,7 +49,7 @@ const TOTAL_COLUMNS = [
 const STORAGE_KEY = 'gsrtc_court_cases_data_v3';
 const STORAGE_META_KEY = 'gsrtc_court_cases_meta_v3';
 const STORAGE_USER_KEY = 'gsrtc_court_cases_user_v3';
-const STORAGE_PROFILES_KEY = 'gsrtc_court_cases_profiles_v1';
+const STORAGE_PROFILES_KEY = 'gsrtc_court_cases_profiles_v2';
 
 export default function App() {
   // Always require login whenever any user opens the link
@@ -71,8 +72,17 @@ export default function App() {
   // Employee Service & Disciplinary Dossier profiles state
   const [employeeProfiles, setEmployeeProfiles] = useState<EmployeeProfileMap>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_PROFILES_KEY);
-      if (saved) return JSON.parse(saved);
+      const saved = localStorage.getItem(STORAGE_PROFILES_KEY) || localStorage.getItem('gsrtc_court_cases_profiles_v1');
+      if (saved) {
+        const parsed: EmployeeProfileMap = JSON.parse(saved);
+        // Repair any old bad or truncated offense strings that might be cached
+        Object.keys(parsed).forEach((k) => {
+          if (parsed[k] && isBadOrTruncatedOffense(parsed[k].offenseDetails)) {
+            parsed[k].offenseDetails = '';
+          }
+        });
+        return parsed;
+      }
     } catch {
       // Fallback
     }
