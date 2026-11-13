@@ -6,7 +6,7 @@ import { Eye, Trash2, Calendar, FileText, User, Archive, Lock, Briefcase, Award,
 interface TableViewProps {
   sheetKey: SheetKey | 'TOTAL';
   headers: string[];
-  rows: Array<{ originalIndex: number; sheetKey?: SheetKey; data: string[] }>;
+  rows: Array<{ originalIndex: number; sheetKey?: SheetKey; caseKey?: string; data: string[] }>;
   selectedRowIndex: number | null;
   employeeProfiles?: EmployeeProfileMap;
   onSelectRow: (originalIndex: number) => void;
@@ -232,10 +232,8 @@ export const TableView: React.FC<TableViewProps> = ({
                             <div className="space-y-1.5 py-0.5">
                               {(() => {
                                 const originSheet = row.sheetKey || (sheetKey === 'TOTAL' ? (rowData[1]?.includes('હાઈકોર્ટ') ? 'HC CASE' : rowData[1]?.includes('લેબર') ? 'LABOUR CASE' : 'IT CASE') : sheetKey);
-                                const caseKey = getCaseKey(originSheet, rowData, originalIndex);
-                                const profile = employeeProfiles?.[caseKey] || Object.values(employeeProfiles || {}).find(p => 
-                                  (p.employeeName && val.includes(p.employeeName)) || (p.pfNo && val.includes(p.pfNo))
-                                );
+                                const caseKey = row.caseKey || getCaseKey(originSheet, rowData, originalIndex);
+                                const profile = employeeProfiles?.[caseKey];
 
                                 const empName = profile?.employeeName || (() => {
                                   const isST = getPetitionerType(val, profile) === 'st';

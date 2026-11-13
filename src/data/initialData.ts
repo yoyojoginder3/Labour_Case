@@ -529,13 +529,39 @@ export function isValidCaseRow(row: string[]): boolean {
   return row.some(cell => typeof cell === 'string' && cell.trim() !== '');
 }
 
-/** Generate a consistent identifier for a case row across sheets */
+/** Generate a consistent, unique identifier for a case row across sheets */
 export function getCaseKey(sheetKey: string, row: string[], index?: number): string {
   if (!row || row.length === 0) return `${sheetKey}_${index ?? 0}`;
-  const caseNo = (row[3] || row[1] || '').trim();
-  const fileNo = (row[1] || '').trim();
-  const emp = (row[5] || row[4] || '').trim().slice(0, 25);
-  return `${sheetKey}__${caseNo || fileNo || `row_${index ?? 0}`}__${emp}`.replace(/[\s\n\/\\]+/g, '_');
+
+  let caseNo = '';
+  let fileNo = '';
+  let emp = '';
+
+  if (sheetKey === 'HC CASE') {
+    fileNo = (row[1] || '').trim();
+    caseNo = (row[3] || '').trim();
+    emp = (row[5] || '').trim().slice(0, 40);
+  } else if (sheetKey === 'DISPOSED ARCHIVE') {
+    fileNo = (row[1] || '').trim(); // Original court
+    caseNo = (row[2] || '').trim();
+    emp = (row[4] || '').trim().slice(0, 40);
+  } else {
+    // LABOUR CASE, IT CASE, etc.
+    // row[1] = રેફ. નંબર, row[2] = કોર્ટ, row[3] = એડવોકેટ, row[4] = કર્મચારીનું નામ
+    caseNo = (row[1] || '').trim();
+    fileNo = (row[2] || '').trim();
+    emp = (row[4] || '').trim().slice(0, 40);
+  }
+
+  const cleanCase = (caseNo && caseNo !== '-' && caseNo !== '--') ? caseNo : '';
+  const cleanFile = (fileNo && fileNo !== '-' && fileNo !== '--') ? fileNo : '';
+  const cleanEmp = (emp && emp !== '-' && emp !== '--') ? emp : '';
+
+  const primaryId = cleanCase || cleanFile || `row_${index ?? 0}`;
+  const secondaryId = cleanFile && cleanFile !== primaryId ? `__${cleanFile}` : '';
+  const empId = cleanEmp || `idx_${index ?? 0}`;
+
+  return `${sheetKey}__${primaryId}${secondaryId}__${empId}`.replace(/[\s\n\/\\]+/g, '_');
 }
 
 /** Determine whether the case was filed by the Employee or by GSRTC (ST) */

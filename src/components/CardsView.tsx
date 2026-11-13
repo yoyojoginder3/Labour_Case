@@ -5,7 +5,7 @@ import { Calendar, User, Eye, Trash2, Copy, Check, FileText, ArrowRight, Briefca
 
 interface CardsViewProps {
   sheetKey: SheetKey | 'TOTAL';
-  rows: Array<{ originalIndex: number; sheetKey?: SheetKey; data: string[] }>;
+  rows: Array<{ originalIndex: number; sheetKey?: SheetKey; caseKey?: string; data: string[] }>;
   selectedRowIndex: number | null;
   employeeProfiles?: EmployeeProfileMap;
   onSelectRow: (originalIndex: number) => void;
@@ -64,8 +64,9 @@ export const CardsView: React.FC<CardsViewProps> = ({
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {rows.map(({ originalIndex, sheetKey: rowSheet, data: rowData }) => {
+      {rows.map(({ originalIndex, sheetKey: rowSheet, caseKey: rowCaseKey, data: rowData }) => {
         const isSelected = selectedRowIndex === originalIndex;
+        const originSheet = rowSheet || (sheetKey === 'TOTAL' ? 'HC CASE' : sheetKey);
 
         // Extract normalized fields based on sheet
         let caseNo = '';
@@ -118,7 +119,7 @@ export const CardsView: React.FC<CardsViewProps> = ({
 
         return (
           <div
-            key={originalIndex}
+            key={rowCaseKey || `${originSheet}_${originalIndex}`}
             onClick={() => onSelectRow(originalIndex)}
             className={`relative overflow-hidden bg-white rounded-xl border p-4 transition-all flex flex-col justify-between hover:shadow-lg cursor-pointer ${
               isSelected
@@ -181,10 +182,8 @@ export const CardsView: React.FC<CardsViewProps> = ({
                     </span>
                   </div>
                   {(() => {
-                    const caseKey = getCaseKey(sheetKey, rowData, originalIndex);
-                    const profile = employeeProfiles?.[caseKey] || Object.values(employeeProfiles || {}).find(p => 
-                      (p.employeeName && applicant.includes(p.employeeName)) || (p.pfNo && applicant.includes(p.pfNo))
-                    );
+                    const caseKey = rowCaseKey || getCaseKey(originSheet, rowData, originalIndex);
+                    const profile = employeeProfiles?.[caseKey];
 
                     const empName = profile?.employeeName || (applicant ? (
                       applicant.includes('અરજદારઃ-') ? applicant.split('અરજદારઃ-')[1].split('(')[0].replace(/સામાવાળા.*/, '').trim() : applicant.split('\n')[0]

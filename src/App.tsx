@@ -49,7 +49,7 @@ const TOTAL_COLUMNS = [
 const STORAGE_KEY = 'gsrtc_court_cases_data_v3';
 const STORAGE_META_KEY = 'gsrtc_court_cases_meta_v3';
 const STORAGE_USER_KEY = 'gsrtc_court_cases_user_v3';
-const STORAGE_PROFILES_KEY = 'gsrtc_court_cases_profiles_v2';
+const STORAGE_PROFILES_KEY = 'gsrtc_court_cases_profiles_v3';
 
 export default function App() {
   // Always require login whenever any user opens the link
@@ -72,16 +72,30 @@ export default function App() {
   // Employee Service & Disciplinary Dossier profiles state
   const [employeeProfiles, setEmployeeProfiles] = useState<EmployeeProfileMap>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_PROFILES_KEY) || localStorage.getItem('gsrtc_court_cases_profiles_v1');
+      const saved =
+        localStorage.getItem(STORAGE_PROFILES_KEY) ||
+        localStorage.getItem('gsrtc_court_cases_profiles_v2') ||
+        localStorage.getItem('gsrtc_court_cases_profiles_v1');
       if (saved) {
         const parsed: EmployeeProfileMap = JSON.parse(saved);
-        // Repair any old bad or truncated offense strings that might be cached
+        const cleaned: EmployeeProfileMap = {};
         Object.keys(parsed).forEach((k) => {
-          if (parsed[k] && isBadOrTruncatedOffense(parsed[k].offenseDetails)) {
-            parsed[k].offenseDetails = '';
+          // Drop legacy colliding IT/LABOUR keys that erroneously used advocate name in caseNo slot
+          if (
+            (k.startsWith('IT_CASE__') || k.startsWith('LABOUR_CASE__')) &&
+            (k.includes('પી.એફ._ઝવેરી') || k.includes('ટી._એલ._હાલારી') || k.includes('ઝવેરી__તેઓની_') || k.includes('ઝવેરી__બીન_જરૂરી'))
+          ) {
+            return;
+          }
+          const prof = parsed[k];
+          if (prof) {
+            if (isBadOrTruncatedOffense(prof.offenseDetails)) {
+              prof.offenseDetails = '';
+            }
+            cleaned[k] = prof;
           }
         });
-        return parsed;
+        return cleaned;
       }
     } catch {
       // Fallback
@@ -294,7 +308,7 @@ export default function App() {
     if (activeSheet === 'SUMMARY' || activeSheet === 'DISPOSED ARCHIVE' || activeSheet === 'CALENDAR') return [];
 
     const query = filter.searchQuery.toLowerCase().trim();
-    const result: Array<{ originalIndex: number; sheetKey: SheetKey; data: string[] }> = [];
+    const result: Array<{ originalIndex: number; sheetKey: SheetKey; caseKey: string; data: string[] }> = [];
 
     if (activeSheet === 'TOTAL') {
       const allCourtSheets: SheetKey[] = ['HC CASE', 'LABOUR CASE', 'IT CASE'];
@@ -386,7 +400,7 @@ export default function App() {
             status
           ];
 
-          result.push({ originalIndex: i, sheetKey: sKey, data: unifiedRow });
+          result.push({ originalIndex: i, sheetKey: sKey, caseKey: getCaseKey(sKey, row, i), data: unifiedRow });
           serial++;
         }
       });
@@ -439,7 +453,7 @@ export default function App() {
         if (pType !== filter.petitionerType) continue;
       }
 
-      result.push({ originalIndex: i, sheetKey: activeSheet, data: row });
+      result.push({ originalIndex: i, sheetKey: activeSheet, caseKey: getCaseKey(activeSheet, row, i), data: row });
     }
 
     return result;
@@ -563,6 +577,9 @@ export default function App() {
 
     if (!confirm('શું તમે આ કેસ રેકોર્ડ ખરેખર કાઢી નાખવા માંગો છો?')) return;
 
+    const deletedRow = data[targetSheet]?.[originalIndex];
+    const deletedKey = deletedRow ? getCaseKey(targetSheet, deletedRow, originalIndex) : '';
+
     setData((prev) => {
       const sheet = [...(prev[targetSheet] || [])];
       sheet.splice(originalIndex, 1);
@@ -576,6 +593,20 @@ export default function App() {
         [targetSheet]: sheet
       };
     });
+
+    if (deletedKey) {
+      setEmployeeProfiles((prev) => {
+        if (!prev[deletedKey]) return prev;
+        const next = { ...prev };
+        delete next[deletedKey];
+        try {
+          localStorage.setItem(STORAGE_PROFILES_KEY, JSON.stringify(next));
+        } catch (e) {
+          console.error(e);
+        }
+        return next;
+      });
+    }
 
     if (selectedRowIndex === originalIndex) setSelectedRowIndex(null);
     showToast('કેસ રેકોર્ડ સફળતાપૂર્વક ડિલીટ થયો.', 'info');
@@ -713,10 +744,16 @@ export default function App() {
     if (detailModalIndex === null) return;
     const targetSheet = detailModalSheetKey;
 
+    const prevRow = data[targetSheet]?.[detailModalIndex];
+    const oldCaseKey = prevRow ? getCaseKey(targetSheet, prevRow, detailModalIndex) : '';
     const caseKey = getCaseKey(targetSheet, updatedRow, detailModalIndex);
     if (updatedProfile) {
       setEmployeeProfiles((prev) => {
-        const next = { ...prev, [caseKey]: updatedProfile };
+        const next = { ...prev };
+        if (oldCaseKey && oldCaseKey !== caseKey) {
+          delete next[oldCaseKey];
+        }
+        next[caseKey] = updatedProfile;
         try {
           localStorage.setItem(STORAGE_PROFILES_KEY, JSON.stringify(next));
         } catch (e) {

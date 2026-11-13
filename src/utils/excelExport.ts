@@ -377,10 +377,7 @@ export async function exportStyledExcelWithLogo(
 
         // Precise Profile Lookup matching getCaseKey used throughout the app
         const caseKey = getCaseKey(sKey, row, rIdx);
-        const storedProfile = employeeProfiles[caseKey] || Object.values(employeeProfiles || {}).find(p => 
-          (p.employeeName && row.some(cell => typeof cell === 'string' && cell.includes(p.employeeName))) ||
-          (p.pfNo && row.some(cell => typeof cell === 'string' && cell.includes(p.pfNo)))
-        );
+        const storedProfile = employeeProfiles[caseKey];
         const initialProfile = extractInitialProfileFromRow(sKey, row);
         const profile = storedProfile || initialProfile;
 
